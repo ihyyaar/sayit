@@ -755,18 +755,26 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     if (!topics.length) throw new Error("No running order came out of that. Try the PDF export, or type the outline in.");
     return { lecture: String(lecture).slice(0, 80), topics };
   }
+  const INDENT = "    ";
   function outlineToTopics(text) {
     const topics = [];
-    text.split("\n").forEach((raw) => {
+    String(text || "").split("\n").forEach((raw) => {
       const line = raw.replace(/\s+$/, "");
       if (!line.trim()) return;
-      const indented = /^(\s{2,}|\t|[-*•])/.test(line);
+      // Leading whitespace of any kind, or a bullet, makes this a subtopic of the
+      // topic above it. A line flush to the left starts a new topic, so outlines
+      // typed with no indentation behave exactly as they always have. This used
+      // to require two spaces, so a single space or a one-space pasted indent was
+      // silently promoted to a topic.
+      const indented = /^[\t ]/.test(line) || /^[-*•]/.test(line.trim());
       const clean = line.replace(/^[\s\-*•]+/, "").trim();
       if (!clean) return;
       if (!indented || !topics.length) topics.push({ key: uid("k"), title: clean.slice(0, 70), subtopics: [], anchors: [{ label: clean.slice(0, 90), text: clean }] });
       else {
+        // No cap. The old limit of 3 dropped the 4th subtopic of a topic without
+        // saying anything, including in the outline shown in the placeholder.
         const t = topics[topics.length - 1];
-        if (t.subtopics.length < 3) t.subtopics.push(clean.slice(0, 40));
+        t.subtopics.push(clean.slice(0, 40));
         t.anchors.push({ label: clean.slice(0, 90), text: clean });
       }
     });
@@ -1698,6 +1706,57 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     const [err, setErr] = useState(null);
     const [notice, setNotice] = useState(null);
     const ref = useRef(null);
+    const outlineRef = useRef(null);
+    const pendingSel = useRef(null);
+    const tabOut = useRef(false);
+    // The textarea is controlled, so a Tab rewrite has to put the caret back.
+    useEffect(() => {
+      const el = outlineRef.current, sel = pendingSel.current;
+      if (el && sel) {
+        el.setSelectionRange(sel[0], sel[1]);
+        pendingSel.current = null;
+      }
+    }, [pasted]);
+    function outlineKeys(e) {
+      // Escape, then Tab, still moves focus onward, so this textarea is not a
+      // keyboard trap for anyone navigating without a mouse.
+      if (e.key === "Escape") {
+        tabOut.current = true;
+        return;
+      }
+      if (e.key !== "Tab") {
+        tabOut.current = false;
+        return;
+      }
+      if (tabOut.current || e.altKey || e.ctrlKey || e.metaKey) {
+        tabOut.current = false;
+        return;
+      }
+      e.preventDefault();
+      const el = e.target, value = el.value;
+      const from = el.selectionStart, to = el.selectionEnd;
+      const lineStart = value.lastIndexOf("\n", from - 1) + 1;
+      let lineEnd = value.indexOf("\n", to);
+      if (lineEnd === -1) lineEnd = value.length;
+      let firstDelta = 0, total = 0;
+      const out = value.slice(lineStart, lineEnd).split("\n").map((ln, i) => {
+        if (e.shiftKey) {
+          const m = /^(\t| {1,4})/.exec(ln);
+          const cut = m ? m[0].length : 0;
+          if (i === 0) firstDelta = -cut;
+          total -= cut;
+          return ln.slice(cut);
+        }
+        if (i === 0) firstDelta = INDENT.length;
+        total += INDENT.length;
+        return INDENT + ln;
+      }).join("\n");
+      const next = value.slice(0, lineStart) + out + value.slice(lineEnd);
+      if (next === value) return;
+      const ns = Math.max(lineStart, from + firstDelta);
+      pendingSel.current = [ns, from === to ? ns : Math.max(ns, to + total)];
+      setPasted(next);
+    }
     const TEXTY = ["txt", "md", "csv", "vtt", "srt", "json"];
     const ext = file ? file.name.split(".").pop().toLowerCase() : null;
     const has = state.topics.length > 0;
@@ -1789,14 +1848,17 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       borderRadius: R.md,
       padding: S.x150,
       marginBottom: S.x150
-    }) }, notice), /* @__PURE__ */ React.createElement(Field, { label: "Outline \u2014 one topic per line, indent for subtopics" }, /* @__PURE__ */ React.createElement(
+    }) }, notice), /* @__PURE__ */ React.createElement(Field, { label: "Outline \u2014 one topic per line, indent for subtopics", hint: "Tab to indent \xB7 Shift + Tab to outdent" }, /* @__PURE__ */ React.createElement(
       "textarea",
       {
+        ref: outlineRef,
         className: "focusable",
         value: pasted,
         onChange: (e) => setPasted(e.target.value),
-        placeholder: "The CREATE funnel\n  Where a behaviour drops out\n  Reading a failing gate\nB = MAP and the action line\n  Motivation is unreliable",
-        style: __spreadProps(__spreadValues({}, inputStyle()), { background: C.sunken, minHeight: 120, resize: "vertical", lineHeight: "22px" })
+        onKeyDown: outlineKeys,
+        spellCheck: false,
+        placeholder: "The CREATE funnel\n    Where a behaviour drops out\n    Reading a failing gate\nB = MAP and the action line\n    Motivation is unreliable",
+        style: __spreadProps(__spreadValues({}, inputStyle()), { background: C.sunken, minHeight: 120, resize: "vertical", lineHeight: "22px", tabSize: 4, MozTabSize: 4 })
       }
     )), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, alignItems: "center", flexWrap: "wrap", marginTop: S.x200 } }, /* @__PURE__ */ React.createElement(
       Btn,
