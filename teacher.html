@@ -583,12 +583,10 @@ try {
   function makeStudentLink(code) {
     return new URL("student.html?c=" + encodeURIComponent(code), location.href).href;
   }
-  const CODE = () => {
-    const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let s = "";
-    for (let i = 0; i < 6; i++) s += A[Math.floor(Math.random() * A.length)];
-    return s;
-  };
+  // Class codes are exactly four digits, 1000-9999: easy to read out and to
+  // type on a phone keypad, and never starting with 0.
+  const CODE = () => String(Math.floor(1e3 + Math.random() * 9e3));
+  const isCode = (c) => /^\d{4}$/.test(String(c || ""));
   const LS = {
     get: (k, d) => {
       try {
@@ -835,7 +833,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           return klass;
         }
         const teacher_key = uid("k");
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 25; i++) {
           const code = CODE();
           const { data, error } = await sb.from("classes").insert({ code, teacher_key, name: name || "Class", status: "idle" }).select().single();
           if (!error) {
@@ -1315,23 +1313,22 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           textAlign: "left"
         }
       },
-      /* @__PURE__ */ React.createElement("div", { style: { height: 110, background: "#AFC7BC", display: "flex", alignItems: "center", justifyContent: "center" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 30, color: C.ink, lineHeight: 1 } }, "+")),
+      /* @__PURE__ */ React.createElement("div", { style: { height: 110, background: C.sunken, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 30, color: C.ink, lineHeight: 1 } }, "+")),
       /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({ padding: S.x150 }, F.body), { color: C.ink }) }, "Start a class")
     )), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x300, display: "flex", alignItems: "flex-end", gap: S.x200, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Btn, null, "View all courses (", COURSES.length, ")"), /* @__PURE__ */ React.createElement("div", { style: { marginLeft: "auto", display: "flex", alignItems: "flex-end", gap: S.x100 } }, /* @__PURE__ */ React.createElement(Field, { label: "Open a class you already made" }, /* @__PURE__ */ React.createElement(
       "input",
       {
         className: "focusable",
         value: code,
-        maxLength: 6,
-        inputMode: "text",
-        autoCapitalize: "characters",
-        autoCorrect: "off",
-        spellCheck: false,
-        onChange: (e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")),
-        placeholder: "ABC123",
+        maxLength: 4,
+        inputMode: "numeric",
+        pattern: "[0-9]*",
+        autoComplete: "off",
+        onChange: (e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4)),
+        placeholder: "0000",
         style: __spreadProps(__spreadValues({}, inputStyle()), { width: 150, letterSpacing: 4, textAlign: "center", fontWeight: 700 })
       }
-    )), /* @__PURE__ */ React.createElement(Btn, { disabled: code.length !== 6 || busy, onClick: openByCode }, busy ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { size: 14 }), " Opening") : "Open it"))), err && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.danger, marginTop: S.x100, textAlign: "right" }) }, err));
+    )), /* @__PURE__ */ React.createElement(Btn, { disabled: !isCode(code) || busy, onClick: openByCode }, busy ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { size: 14 }), " Opening") : "Open it"))), err && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.danger, marginTop: S.x100, textAlign: "right" }) }, err));
   }
   function CreateClass({ store, onCreated, onBack }) {
     const [name, setName] = useState("");
@@ -1369,11 +1366,17 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     const link = makeStudentLink(state.klass.code);
     const live = state.klass.status === "live";
     const topic = state.topics.find((t) => t.id === state.klass.current_topic_id);
+    const subs = topic ? topic.subtopics || [] : [];
+    const at = (idx, v) => topic ? pulseAt(state.pulses, topic.id, idx, v) : 0;
+    // On the live board the current topic moves into the outline block below,
+    // with its understanding beside it. The setup screen keeps the plain title
+    // line, since the running order is shown right underneath it there.
+    const outline = !firstRun && !!topic;
     return /* @__PURE__ */ React.createElement(Card, { style: {
       padding: S.x300,
       marginBottom: firstRun ? 0 : S.x250,
       borderRadius: firstRun ? `${R.xl}px ${R.xl}px 0 0` : R.xl
-    } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x300, flexWrap: "wrap", alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 260 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 28, lineHeight: "34px", color: C.ink }) }, state.klass.name), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginTop: S.x025 }) }, topic ? topic.title : "No running order yet"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, alignItems: "center", marginTop: S.x200, flexWrap: "wrap" } }, !firstRun && /* @__PURE__ */ React.createElement(
+    } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x300, flexWrap: "wrap", alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 260 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 28, lineHeight: "34px", color: C.ink }) }, state.klass.name), /* @__PURE__ */ !outline && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginTop: S.x025 }) }, topic ? topic.title : "No running order yet"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, alignItems: "center", marginTop: S.x200, flexWrap: "wrap" } }, !firstRun && /* @__PURE__ */ React.createElement(
       Btn,
       {
         tone: live ? "default" : { background: C.ink, color: C.onInk },
@@ -1389,17 +1392,17 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     } }, "Copy student link"), /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: () => {
       navigator.clipboard.writeText(link);
       onToast("Link copied. Paste it into any QR generator to project it.");
-    } }, "Copy link for QR")))));
+    } }, "Copy link for QR")))), outline && /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250, paddingTop: S.x200, borderTop: `1px solid ${C.line}` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "baseline", gap: S.x150 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, flexShrink: 0 }) }, "Topic ", topic.ord), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.body), { fontWeight: 700, color: C.ink }) }, topic.title), subs.length === 0 && /* @__PURE__ */ React.createElement(PulseCounts, { up: at(-1, 1), down: at(-1, -1) })), subs.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x100, maxHeight: 240, overflowY: "auto", overscrollBehavior: "contain" } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("div", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x150, padding: `${S.x075}px ${S.x150}px`, borderRadius: R.md, background: C.sunken } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.body), { color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, st), /* @__PURE__ */ React.createElement(PulseCounts, { up: at(idx, 1), down: at(idx, -1) }))))));
   }
+  const pulseAt = (pulses, topicId, idx, v) => (pulses || []).filter((p) => p.topic_id === topicId && p.subtopic_idx === idx && p.value === v).length;
+  const PulseCounts = ({ up, down }) => /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ display: "inline-flex", gap: S.x150, alignItems: "center", flexShrink: 0 }, F.small), {}) }, /* @__PURE__ */ React.createElement("span", { title: "Following this", style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: up ? C.table : C.muted } }, /* @__PURE__ */ React.createElement(ThumbIcon, { color: up ? C.table : C.muted }), " ", up), /* @__PURE__ */ React.createElement("span", { title: "Lost me", style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: down ? C.danger : C.muted } }, /* @__PURE__ */ React.createElement(ThumbIcon, { down: true, color: down ? C.danger : C.muted }), " ", down));
   function RunningOrder({ state, store, reload }) {
     return /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { color: C.ink }) }, "The running order"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginTop: S.x025, marginBottom: S.x200 }) }, state.topics.length ? "Tap one to put it on now." : "Nothing yet. Add the deck you're teaching from and the class builds itself."), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x100 } }, state.topics.map((tp) => {
       const on = tp.id === state.klass.current_topic_id;
       const n = state.anchors.filter((a) => a.topic_id === tp.id).length;
       const subs = tp.subtopics || [];
       const rows = (state.pulses || []).filter((p) => p.topic_id === tp.id);
-      const countAt = (idx, v) => rows.filter((p) => p.subtopic_idx === idx && p.value === v).length;
-      // Same two figures as the roll-up beside the tabs, so they read alike.
-      const Counts = ({ up, down }) => /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ display: "inline-flex", gap: S.x150, alignItems: "center", flexShrink: 0 }, F.small), {}) }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: up ? C.table : C.muted } }, /* @__PURE__ */ React.createElement(ThumbIcon, { color: up ? C.table : C.muted }), " ", up), /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: down ? C.danger : C.muted } }, /* @__PURE__ */ React.createElement(ThumbIcon, { down: true, color: down ? C.danger : C.muted }), " ", down));
+      const countAt = (idx, v) => pulseAt(rows, tp.id, idx, v);
       const totalUp = rows.filter((p) => p.value === 1).length;
       const totalDown = rows.filter((p) => p.value === -1).length;
       return /* @__PURE__ */ React.createElement(
@@ -1421,9 +1424,9 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
             display: "block"
           }
         },
-        /* @__PURE__ */ React.createElement("span", { style: { display: "flex", gap: S.x150, alignItems: "baseline" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, tp.ord), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1 }, F.body), { fontWeight: on ? 700 : 400, color: C.ink }) }, tp.title), !on && (totalUp > 0 || totalDown > 0) && /* @__PURE__ */ React.createElement(Counts, { up: totalUp, down: totalDown }), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, n, " anchor", n === 1 ? "" : "s")),
-        on && subs.length > 0 && /* @__PURE__ */ React.createElement("span", { style: { display: "grid", gap: S.x050, marginTop: S.x100, paddingLeft: 20 } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("span", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.small), { color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, st), /* @__PURE__ */ React.createElement(Counts, { up: countAt(idx, 1), down: countAt(idx, -1) })))),
-        on && subs.length === 0 && (totalUp > 0 || totalDown > 0) && /* @__PURE__ */ React.createElement("span", { style: { display: "flex", marginTop: S.x100, paddingLeft: 20 } }, /* @__PURE__ */ React.createElement(Counts, { up: totalUp, down: totalDown }))
+        /* @__PURE__ */ React.createElement("span", { style: { display: "flex", gap: S.x150, alignItems: "baseline" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, tp.ord), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1 }, F.body), { fontWeight: on ? 700 : 400, color: C.ink }) }, tp.title), !on && (totalUp > 0 || totalDown > 0) && /* @__PURE__ */ React.createElement(PulseCounts, { up: totalUp, down: totalDown }), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, n, " anchor", n === 1 ? "" : "s")),
+        on && subs.length > 0 && /* @__PURE__ */ React.createElement("span", { style: { display: "grid", gap: S.x050, marginTop: S.x100, paddingLeft: 20 } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("span", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.small), { color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, st), /* @__PURE__ */ React.createElement(PulseCounts, { up: countAt(idx, 1), down: countAt(idx, -1) })))),
+        on && subs.length === 0 && (totalUp > 0 || totalDown > 0) && /* @__PURE__ */ React.createElement("span", { style: { display: "flex", marginTop: S.x100, paddingLeft: 20 } }, /* @__PURE__ */ React.createElement(PulseCounts, { up: totalUp, down: totalDown }))
       );
     })));
   }
@@ -1546,10 +1549,6 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       setLoadErr(null);
       setScreen("courses");
     } }, "Back to my courses"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: resetDevice }, "Reset this device")))));
-    const topic = state.topics.find((t) => t.id === state.klass.current_topic_id);
-    const topicPulses = topic ? (state.pulses || []).filter((p) => p.topic_id === topic.id) : [];
-    const followingN = topicPulses.filter((p) => p.value === 1).length;
-    const lostN = topicPulses.filter((p) => p.value === -1).length;
     const all = state.thoughts;
     const live = all.filter((t) => t.visibility === "now" && t.status !== "avoided");
     const later = all.filter((t) => t.visibility === "later" && t.status !== "avoided");
@@ -1627,7 +1626,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         })
       },
       "Class setup"
-    ), (followingN > 0 || lostN > 0) && /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ marginLeft: "auto", display: "inline-flex", gap: S.x150, alignItems: "center" }, F.small), { paddingBottom: S.x100 }) }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: C.table } }, /* @__PURE__ */ React.createElement(ThumbIcon, { color: C.table }), " ", followingN), /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: lostN ? C.danger : C.muted } }, /* @__PURE__ */ React.createElement(ThumbIcon, { down: true, color: lostN ? C.danger : C.muted }), " ", lostN))), tab === "live" && /* @__PURE__ */ React.createElement("div", null, live.length === 0 && /* @__PURE__ */ React.createElement(Card, { style: { padding: `${S.x600 || 64}px ${S.x300}px`, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 16, color: C.body }) }, "No questions yet :D")), live.map((t) => {
+    )), tab === "live" && /* @__PURE__ */ React.createElement("div", null, live.length === 0 && /* @__PURE__ */ React.createElement(Card, { style: { padding: `${S.x600 || 64}px ${S.x300}px`, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 16, color: C.body }) }, "No questions yet :D")), live.map((t) => {
       const done = t.status === "addressed" || t.status === "spoken";
       return /* @__PURE__ */ React.createElement(QuestionRow, { key: t.id, t, anchors: state.anchors, strike: done }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Pill, { bg: C.okBg, fg: C.okFg, onClick: async () => {
         await store.status(t.id, "addressed");
@@ -1679,10 +1678,10 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         borderRadius: R.full,
         padding: `${S.x025}px ${S.x100}px`
       }) }, q.status), a && /* @__PURE__ */ React.createElement(Tag, null, a.label), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ marginLeft: "auto" }, F.small), { color: C.muted }) }, who, " \xB7 ", relTime(t.created_at))), /* @__PURE__ */ React.createElement("div", { className: "thought", style: { fontSize: 18, lineHeight: "26px", color: C.ink, marginBottom: S.x200 } }, t.text), q.status === "pending" && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(
-        Btn,
+        Pill,
         {
-          tone: "primary",
-          compact: true,
+          bg: C.now,
+          fg: C.onInk,
           onClick: async () => {
             await store.setQueue(t.id, { status: "scheduled", scheduled_for: "after today's class" });
             reload();
@@ -1690,9 +1689,10 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         },
         "Answer after class"
       ), /* @__PURE__ */ React.createElement(
-        Btn,
+        Pill,
         {
-          compact: true,
+          bg: C.neutralBg,
+          fg: C.ink,
           onClick: async () => {
             await store.setQueue(t.id, { status: "scheduled", scheduled_for: "in the next session" });
             reload();
@@ -1708,22 +1708,22 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           placeholder: "Write the answer, or leave it and answer out loud.",
           style: __spreadProps(__spreadValues({}, inputStyle()), { background: C.sunken, minHeight: 72, resize: "vertical", marginBottom: S.x150 })
         }
-      ), /* @__PURE__ */ React.createElement(
-        Btn,
+      ), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(
+        Pill,
         {
-          compact: true,
-          tone: { background: C.table, color: "#FFFFFF" },
+          bg: C.table,
+          fg: "#FFFFFF",
           onClick: async () => {
             await store.setQueue(t.id, { status: "answered", response: draft[t.id] || "Answered in the after-class discussion." });
             reload();
           }
         },
         "Mark answered"
-      )), q.status === "answered" && q.response && /* @__PURE__ */ React.createElement("div", { style: __spreadValues({ background: C.okBg, color: C.ink, borderRadius: R.lg, padding: S.x200 }, F.body) }, q.response));
-    })), tab === "setup" && /* @__PURE__ */ React.createElement("div", { className: "split-even" }, /* @__PURE__ */ React.createElement(RunningOrder, { state, store, reload }), /* @__PURE__ */ React.createElement(DeckPanel, { state, store, reload })), tab === "avoided" && /* @__PURE__ */ React.createElement("div", null, avoided.length === 0 && /* @__PURE__ */ React.createElement(Card, { style: { padding: `${S.x600 || 64}px ${S.x300}px`, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 16, color: C.body }) }, "Nothing set aside")), avoided.map((t) => /* @__PURE__ */ React.createElement(QuestionRow, { key: t.id, t, anchors: state.anchors }, /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: async () => {
+      ))), q.status === "answered" && q.response && /* @__PURE__ */ React.createElement("div", { style: __spreadValues({ background: C.okBg, color: C.ink, borderRadius: R.lg, padding: S.x200 }, F.body) }, q.response));
+    })), tab === "setup" && /* @__PURE__ */ React.createElement("div", { className: "split-even" }, /* @__PURE__ */ React.createElement(RunningOrder, { state, store, reload }), /* @__PURE__ */ React.createElement(DeckPanel, { state, store, reload })), tab === "avoided" && /* @__PURE__ */ React.createElement("div", null, avoided.length === 0 && /* @__PURE__ */ React.createElement(Card, { style: { padding: `${S.x600 || 64}px ${S.x300}px`, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 16, color: C.body }) }, "Nothing set aside")), avoided.map((t) => /* @__PURE__ */ React.createElement(QuestionRow, { key: t.id, t, anchors: state.anchors }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Pill, { bg: C.neutralBg, fg: C.ink, onClick: async () => {
       await store.status(t.id, "ready");
       reload();
-    } }, "Unavoid")))), /* @__PURE__ */ React.createElement(Toast, { message: toast }));
+    } }, "Unavoid"))))), /* @__PURE__ */ React.createElement(Toast, { message: toast }));
   }
   function DeckPanel({ state, store, reload }) {
     const [file, setFile] = useState(null);

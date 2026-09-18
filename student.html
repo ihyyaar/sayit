@@ -20,6 +20,8 @@
   .split { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
   .split-even { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
   @media (max-width: 900px) { .split, .split-even { grid-template-columns: 1fr; } }
+  .sayit-shell { height: 100vh; }
+  @supports (height: 100dvh) { .sayit-shell { height: 100dvh; } }
   #boot { max-width: 520px; margin: 60px auto; padding: 24px; background: #fff;
     border: 1px solid #DDDEE1; border-radius: 12px; line-height: 1.6; color: #505258; font-size: 14px; }
 </style>
@@ -632,12 +634,10 @@ try {
     return Math.round(m / 60) + "h ago";
   }
   const uid = (p) => p + "_" + Math.random().toString(36).slice(2, 9);
-  const CODE = () => {
-    const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let s = "";
-    for (let i = 0; i < 6; i++) s += A[Math.floor(Math.random() * A.length)];
-    return s;
-  };
+  // Class codes are exactly four digits, 1000-9999: easy to read out and to
+  // type on a phone keypad, and never starting with 0.
+  const CODE = () => String(Math.floor(1e3 + Math.random() * 9e3));
+  const isCode = (c) => /^\d{4}$/.test(String(c || ""));
   const LS = {
     get: (k, d) => {
       try {
@@ -947,7 +947,7 @@ try {
           return klass;
         }
         const teacher_key = uid("k");
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 25; i++) {
           const code = CODE();
           const { data, error } = await sb.from("classes").insert({ code, teacher_key, name: name || "Class", status: "idle" }).select().single();
           if (!error) {
@@ -1245,6 +1245,16 @@ try {
           reaction_count: (reactors[t.id] || []).length
         }));
       },
+      async repliesFor(thoughtIds) {
+        if (!thoughtIds.length) return [];
+        if (solo) {
+          const d = soloRead();
+          return d.thoughts.filter((t) => thoughtIds.includes(t.id)).flatMap((t) => (t.replies || []).map((r) => __spreadProps(__spreadValues({}, r), { thought_id: t.id })));
+        }
+        const { data, error } = await sb.from("replies").select("id,thought_id,student_id,text,created_at").in("thought_id", thoughtIds).order("created_at", { ascending: true });
+        if (error) throw error;
+        return data || [];
+      },
       async reply(thoughtId, studentId, text) {
         if (solo) {
           const d = soloRead();
@@ -1297,17 +1307,30 @@ try {
     };
     return api;
   }
-  function QuestionCard({ t, anchors, mine, me, busy, onMove, onRecall, onDelete, onReply, onReact }) {
+  function QuestionCard({ t, anchors, topics, mine, me, busy, onMove, onRecall, onDelete, onReply, onReact }) {
     const [open, setOpen] = useState(false);
     const [reply, setReply] = useState("");
+    const [posting, setPosting] = useState(false);
     const [confirm2, setConfirm] = useState(false);
     const anchor = anchors.find((a) => a.id === t.anchor_id);
+    // Where in the lecture outline this question sits: the topic it was sent
+    // under, and the anchor if one was pinned. Both come from the existing
+    // topics / anchors data; nothing is duplicated.
+    const topic = (topics || []).find((x) => x.id === (t.topic_id || (anchor && anchor.topic_id)));
+    const where = [
+      topic ? `Topic ${topic.ord} \xB7 ${topic.title}` : null,
+      anchor && (!topic || anchor.label !== topic.title) ? anchor.label : null
+    ].filter(Boolean).join("  \u203A  ");
     const done = t.status === "spoken" || t.status === "addressed";
     const called = t.status === "taking";
     const setAside = t.status === "avoided";
     const replies = t.replies || [];
     const reacted = (t.reacted_by || []).includes(me && me.id);
     const isTable = t.visibility === "table";
+    // A thread stays visible once it has follow-ups, even if the question has
+    // since moved off the table. New follow-ups are still only for table
+    // questions, which is where the design offers them.
+    const threaded = isTable || replies.length > 0;
     const tint = mine ? C.nowSub : C.surface;
     return /* @__PURE__ */ React.createElement("div", { style: {
       background: tint,
@@ -1328,14 +1351,14 @@ try {
       display: "flex",
       alignItems: "center",
       justifyContent: "center"
-    } }, done && /* @__PURE__ */ React.createElement("span", { style: { color: "#fff", fontSize: 9, lineHeight: 1 } }, "\u2713")), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: done ? C.muted : C.ink, textDecoration: done ? "line-through" : "none" }) }, t.text), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), {
+    } }, done && /* @__PURE__ */ React.createElement("span", { style: { color: "#fff", fontSize: 9, lineHeight: 1 } }, "\u2713")), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, where && /* @__PURE__ */ React.createElement("div", { title: where, style: __spreadProps(__spreadValues({}, F.small), { color: C.now, fontWeight: 600, marginBottom: S.x025, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, where), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: done ? C.muted : C.ink, textDecoration: done ? "line-through" : "none" }) }, t.text), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), {
       color: C.muted,
       marginTop: S.x050,
       display: "flex",
       gap: S.x050,
       alignItems: "center",
       flexWrap: "wrap"
-    }) }, /* @__PURE__ */ React.createElement("span", null, mine ? "You" : t.student_name || "Someone"), /* @__PURE__ */ React.createElement("span", null, "\xB7"), /* @__PURE__ */ React.createElement("span", null, relTime(t.created_at)), setAside && /* @__PURE__ */ React.createElement("span", null, "\xB7"), setAside && /* @__PURE__ */ React.createElement("span", null, "set aside for now"), anchor && /* @__PURE__ */ React.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 } }, "\xB7 ", anchor.label))), mine && !confirm2 && /* @__PURE__ */ React.createElement(
+    }) }, /* @__PURE__ */ React.createElement("span", null, mine ? "You" : t.student_name || "Someone"), /* @__PURE__ */ React.createElement("span", null, "\xB7"), /* @__PURE__ */ React.createElement("span", null, relTime(t.created_at)), setAside && /* @__PURE__ */ React.createElement("span", null, "\xB7"), setAside && /* @__PURE__ */ React.createElement("span", null, "set aside for now"))), mine && !confirm2 && /* @__PURE__ */ React.createElement(
       "button",
       {
         className: "focusable",
@@ -1353,7 +1376,7 @@ try {
         }
       },
       "\u2715"
-    )), isTable && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: S.x100, marginTop: S.x100 } }, !mine && /* @__PURE__ */ React.createElement(
+    )), threaded && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: S.x100, marginTop: S.x100 } }, isTable && !mine && /* @__PURE__ */ React.createElement(
       "button",
       {
         className: "focusable",
@@ -1395,12 +1418,12 @@ try {
         transition: `transform 150ms ${EASE}`,
         fontSize: 9
       } }, "\u25BE")
-    ))), isTable && open && /* @__PURE__ */ React.createElement("div", { style: { padding: `0 ${S.x150}px ${S.x150}px`, display: "grid", gap: S.x100 } }, replies.map((r) => /* @__PURE__ */ React.createElement("div", { key: r.id, style: {
+    ))), threaded && open && /* @__PURE__ */ React.createElement("div", { style: { padding: `0 ${S.x150}px ${S.x150}px`, display: "grid", gap: S.x100 } }, replies.map((r) => /* @__PURE__ */ React.createElement("div", { key: r.id, style: {
       background: C.surface,
       border: `1px solid ${C.line}`,
       borderRadius: R.md,
       padding: S.x100
-    } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x025 }) }, r.student_name, " \xB7 ", relTime(r.created_at)), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.ink }) }, r.text))), /* @__PURE__ */ React.createElement(
+    } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x025 }) }, r.student_name, " \xB7 ", relTime(r.created_at)), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.ink }) }, r.text))), isTable && /* @__PURE__ */ React.createElement(
       "textarea",
       {
         className: "focusable",
@@ -1409,10 +1432,12 @@ try {
         placeholder: "Add a follow up",
         style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 52, resize: "none" })
       }
-    ), reply.trim() && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "primary", onClick: () => {
-      onReply(t, reply.trim());
-      setReply("");
-    } }, "Add it"))), called && /* @__PURE__ */ React.createElement("div", { style: { margin: `0 ${S.x150}px ${S.x150}px`, background: C.now, borderRadius: R.md, padding: S.x150 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.onInk, marginBottom: S.x100 }) }, "The floor is yours"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: { background: C.surface, color: C.now }, onClick: () => onMove(t, "__spoken") }, "I said it")), confirm2 && /* @__PURE__ */ React.createElement("div", { style: { padding: `0 ${S.x150}px ${S.x150}px`, display: "flex", gap: S.x100, alignItems: "center" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.body, marginRight: "auto" }) }, "Delete this?"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "danger", onClick: () => onDelete(t) }, "Delete"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => setConfirm(false) }, "Cancel")), mine && !called && !confirm2 && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", borderTop: `1px solid ${C.line}` } }, Object.values(ACTIONS).map((a, i) => {
+    ), isTable && reply.trim() && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "primary", disabled: posting, onClick: async () => {
+      setPosting(true);
+      const ok = await onReply(t, reply.trim());
+      setPosting(false);
+      if (ok !== false) setReply("");
+    } }, posting ? "Adding" : "Add it"))), called && /* @__PURE__ */ React.createElement("div", { style: { margin: `0 ${S.x150}px ${S.x150}px`, background: C.now, borderRadius: R.md, padding: S.x150 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.onInk, marginBottom: S.x100 }) }, "The floor is yours"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: { background: C.surface, color: C.now }, onClick: () => onMove(t, "__spoken") }, "I said it")), confirm2 && /* @__PURE__ */ React.createElement("div", { style: { padding: `0 ${S.x150}px ${S.x150}px`, display: "flex", gap: S.x100, alignItems: "center" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.body, marginRight: "auto" }) }, "Delete this?"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "danger", onClick: () => onDelete(t) }, "Delete"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => setConfirm(false) }, "Cancel")), mine && !called && !confirm2 && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", borderTop: `1px solid ${C.line}` } }, Object.values(ACTIONS).map((a, i) => {
       const on = t.visibility === a.key;
       return /* @__PURE__ */ React.createElement(
         "button",
@@ -1488,7 +1513,8 @@ try {
         }
         const shape = await store.shape(k.id);
         const [thoughts, queue, students, pulses] = await Promise.all([store.classThoughts(k.id), store.queue(k.id), store.students(k.id), store.pulses(k.id)]);
-        setState(__spreadProps(__spreadValues({ klass: k }, shape), { thoughts, queue, students, pulses }));
+        const replies = await store.repliesFor(thoughts.filter((t) => t.student_id === me.id).map((t) => t.id));
+        setState(__spreadProps(__spreadValues({ klass: k }, shape), { thoughts, queue, students, pulses, replies }));
         setLoadErr(null);
         pullFeed.current();
       } catch (e) {
@@ -1616,6 +1642,17 @@ try {
         setSending(false);
       }
     }
+    async function addReply(th, body) {
+      try {
+        await store.reply(th.id, me.id, body);
+        await refresh();
+        if (me.table_id) setFeed(await store.tableFeed(me.table_id));
+        return true;
+      } catch (e) {
+        setToast({ bad: true, text: "Couldn't add that follow-up." });
+        return false;
+      }
+    }
     async function del(t) {
       try {
         await store.remove(t.id);
@@ -1625,6 +1662,11 @@ try {
         setToast({ bad: true, text: "Couldn't delete it." });
       }
     }
+    const nameOf = (id) => ((state.students || []).find((s) => s.id === id) || {}).name || "Someone";
+    const repliesOn = {};
+    (state.replies || []).forEach((r) => {
+      (repliesOn[r.thought_id] = repliesOn[r.thought_id] || []).push(__spreadProps(__spreadValues({}, r), { student_name: nameOf(r.student_id) }));
+    });
     const subs = current ? current.subtopics || [] : [];
     // -1 is the topic itself, which is what a topic with no subtopics votes on.
     const myVote = (idx) => {
@@ -1704,12 +1746,12 @@ try {
         })
       },
       (me.name || "?").slice(0, 1).toUpperCase()
-    )), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: S.x150, gap: S.x150 } }, loadErr && /* @__PURE__ */ React.createElement(Banner, { tone: "bad", title: "Can't reach the class" }, loadErr), /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x050, flexShrink: 0 } }, previous && /* @__PURE__ */ React.createElement(TopicRow, { t: previous, tone: "done" }), current ? /* @__PURE__ */ React.createElement("div", { style: { background: C.now, borderRadius: R.md, padding: `${S.x100}px ${S.x150}px` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: S.x100 } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: S.x075, marginBottom: S.x050 } }, /* @__PURE__ */ React.createElement("span", { className: "livedot", style: { width: 6, height: 6, borderRadius: R.full, background: C.onInk, flexShrink: 0 } }), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { fontWeight: 700, color: C.onInkSoft, letterSpacing: 0.3 }) }, "ON NOW")), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.onInk }) }, current.title)), subs.length === 0 && /* @__PURE__ */ React.createElement(Thumbs, { idx: -1, size: 28 })), subs.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x100 } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("div", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.small), {
+    )), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: S.x150, gap: S.x150, overflowY: "auto" } }, loadErr && /* @__PURE__ */ React.createElement(Banner, { tone: "bad", title: "Can't reach the class" }, loadErr), current && /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x050, flexShrink: 0, maxHeight: "32vh", overflowY: "auto", overscrollBehavior: "contain" } }, previous && /* @__PURE__ */ React.createElement(TopicRow, { t: previous, tone: "done" }), current ? /* @__PURE__ */ React.createElement("div", { style: { background: C.now, borderRadius: R.md, padding: `${S.x100}px ${S.x150}px` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: S.x100 } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.onInk }) }, current.title)), subs.length === 0 && /* @__PURE__ */ React.createElement(Thumbs, { idx: -1, size: 28 })), subs.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x100 } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("div", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.small), {
       color: C.onInk,
       background: C.onInkLine,
       borderRadius: R.sm,
       padding: `${S.x025}px ${S.x075}px`
-    }) }, st), /* @__PURE__ */ React.createElement(Thumbs, { idx, size: 24 }))))) : /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({ padding: S.x150 }, F.body), { color: C.muted }) }, "Nothing set yet"), next && /* @__PURE__ */ React.createElement(TopicRow, { t: next, tone: "next" })), /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x150, flexShrink: 0 } }, /* @__PURE__ */ React.createElement(
+    }) }, st), /* @__PURE__ */ React.createElement(Thumbs, { idx, size: 24 }))))) : null, next && /* @__PURE__ */ React.createElement(TopicRow, { t: next, tone: "next" })), /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x150, flexShrink: 0 } }, /* @__PURE__ */ React.createElement(
       "textarea",
       {
         ref: boxRef,
@@ -1827,7 +1869,7 @@ try {
         tone: ready ? { background: C.tableSub, color: C.table } : "default"
       },
       "Table"
-    ), /* @__PURE__ */ React.createElement(Btn, { compact: true, full: true, disabled: !ready || sending, onClick: () => send("now"), tone: ready ? "primary" : "default" }, "Say now"), /* @__PURE__ */ React.createElement(Btn, { compact: true, full: true, disabled: !ready || sending, onClick: () => send("later") }, "Say later"))), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React.createElement("div", { style: { flexShrink: 0 } }, /* @__PURE__ */ React.createElement(PanelTabs, { value: pane, onChange: setPane, items: [
+    ), /* @__PURE__ */ React.createElement(Btn, { compact: true, full: true, disabled: !ready || sending, onClick: () => send("now"), tone: ready ? "primary" : "default" }, "Say now"), /* @__PURE__ */ React.createElement(Btn, { compact: true, full: true, disabled: !ready || sending, onClick: () => send("later") }, "Say later"))), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minHeight: 220, display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React.createElement("div", { style: { flexShrink: 0 } }, /* @__PURE__ */ React.createElement(PanelTabs, { value: pane, onChange: setPane, items: [
       ["table", "Your table", feed.length],
       ["mine", "Your questions", mine.length]
     ] })), /* @__PURE__ */ React.createElement("div", { style: {
@@ -1851,16 +1893,14 @@ try {
         key: t.id,
         t,
         anchors: state.anchors,
+        topics: state.topics,
         me,
         busy: sending,
         mine: t.student_id === me.id,
         onMove: move,
         onRecall: recall,
         onDelete: del,
-        onReply: async (th, b) => {
-          await store.reply(th.id, me.id, b);
-          setFeed(await store.tableFeed(me.table_id));
-        },
+        onReply: addReply,
         onReact: async (th, on) => {
           await store.react(th.id, me.id, on);
           setFeed(await store.tableFeed(me.table_id));
@@ -1871,16 +1911,16 @@ try {
       return /* @__PURE__ */ React.createElement("div", { key: t.id }, /* @__PURE__ */ React.createElement(
         QuestionCard,
         {
-          t,
+          t: __spreadProps(__spreadValues({}, t), { replies: repliesOn[t.id] || [] }),
           anchors: state.anchors,
+          topics: state.topics,
           me,
           mine: true,
           busy: sending,
           onMove: move,
           onRecall: recall,
           onDelete: del,
-          onReply: () => {
-          },
+          onReply: addReply,
           onReact: () => {
           }
         }
@@ -1919,13 +1959,15 @@ try {
       }
     ))), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", full: true, disabled: !ok, onClick: () => onDone({ name: name.trim(), email: email.trim() }) }, "Continue"))), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginTop: S.x200, lineHeight: "18px" }) }, "No password. Anything you don't send stays in your own notes, so there's nothing here worth locking."));
   }
-  const codeFromUrl = () => (new URLSearchParams(location.search).get("c") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  const codeFromUrl = () => {
+    const d = (new URLSearchParams(location.search).get("c") || "").replace(/\D/g, "");
+    return isCode(d) ? d : "";
+  };
   function JoinClass({ store, identity, onJoined, onBack }) {
     const [code, setCode] = useState(codeFromUrl);
     const [klass, setKlass] = useState(null);
     const [tables, setTables] = useState([]);
     const [tableId, setTableId] = useState("");
-    const [newTable, setNewTable] = useState("");
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState(null);
     async function find(c) {
@@ -1933,7 +1975,7 @@ try {
       setErr(null);
       try {
         const k = await store.getClass(c.trim());
-        if (!k) throw new Error("No class with that code. Check the letters with your teacher.");
+        if (!k) throw new Error("No class with that code. Check the digits with your teacher.");
         const sh = await store.shape(k.id);
         setKlass(k);
         setTables(sh.tables);
@@ -1948,13 +1990,10 @@ try {
       setBusy(true);
       setErr(null);
       try {
-        let tid = tableId, tname = (tables.find((t) => t.id === tid) || {}).name || "";
-        if (newTable.trim()) {
-          const t = await store.addTable(klass.id, newTable.trim());
-          tid = t.id;
-          tname = t.name;
-        }
-        const student = await store.join(klass.id, { name: identity.name, tableId: tid || null });
+        const table = tables.find((t) => t.id === tableId);
+        if (!table) throw new Error("Pick your table first.");
+        const tid = table.id, tname = table.name;
+        const student = await store.join(klass.id, { name: identity.name, tableId: tid });
         onJoined({ code: klass.code, student: __spreadProps(__spreadValues({}, student), { tableName: tname }) });
       } catch (e) {
         setErr(e.message);
@@ -1966,20 +2005,19 @@ try {
     useEffect(() => {
       if (prefilled.current) return;
       prefilled.current = true;
-      if (codeFromUrl().length === 6) find(codeFromUrl());
+      if (isCode(codeFromUrl())) find(codeFromUrl());
     }, []);
-    return /* @__PURE__ */ React.createElement("div", { style: { padding: `${S.x600 || 64}px ${S.x250}px` } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 26, lineHeight: "32px", color: C.ink, marginBottom: S.x050 }) }, klass ? klass.name : "Join your class"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginBottom: S.x300 }) }, klass ? "Where are you sitting?" : "Enter the code your teacher put on the board."), /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x250 } }, !klass ? /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(Field, { label: "Class code", hint: "Six characters, from your teacher." }, /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React.createElement("div", { style: { padding: `${S.x600 || 64}px ${S.x250}px` } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 26, lineHeight: "32px", color: C.ink, marginBottom: S.x050 }) }, klass ? klass.name : "Join your class"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginBottom: S.x300 }) }, klass ? "Where are you sitting?" : "Enter the code your teacher put on the board."), /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x250 } }, !klass ? /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(Field, { label: "Class code", hint: "Four digits, from your teacher." }, /* @__PURE__ */ React.createElement(
       "input",
       {
         className: "focusable",
         value: code,
-        maxLength: 6,
-        inputMode: "text",
-        autoCapitalize: "characters",
-        autoCorrect: "off",
-        spellCheck: false,
-        onChange: (e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")),
-        placeholder: "ABC123",
+        maxLength: 4,
+        inputMode: "numeric",
+        pattern: "[0-9]*",
+        autoComplete: "off",
+        onChange: (e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4)),
+        placeholder: "0000",
         style: __spreadProps(__spreadValues({}, inputStyle()), {
           fontSize: code.length > 4 ? 26 : 32,
           lineHeight: "38px",
@@ -1990,29 +2028,16 @@ try {
         }),
         autoFocus: true
       }
-    )), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", full: true, disabled: code.length !== 6 || busy, onClick: () => find(code) }, busy ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { color: C.onInk, size: 14 }), " Looking") : "Find the class"))) : /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x250 } }, /* @__PURE__ */ React.createElement(Field, { label: "Your table" }, /* @__PURE__ */ React.createElement(
+    )), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", full: true, disabled: !isCode(code) || busy, onClick: () => find(code) }, busy ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { color: C.onInk, size: 14 }), " Looking") : "Find the class"))) : /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x250 } }, /* @__PURE__ */ React.createElement(Field, { label: "Your table" }, /* @__PURE__ */ React.createElement(
       "select",
       {
         className: "focusable",
         value: tableId,
-        onChange: (e) => {
-          setTableId(e.target.value);
-          setNewTable("");
-        },
+        onChange: (e) => setTableId(e.target.value),
         style: inputStyle()
       },
-      tables.map((t) => /* @__PURE__ */ React.createElement("option", { key: t.id, value: t.id }, t.name)),
-      /* @__PURE__ */ React.createElement("option", { value: "" }, "Somewhere else")
-    )), /* @__PURE__ */ React.createElement(Field, { label: "Or name your own", hint: "Whatever your group calls itself." }, /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        className: "focusable",
-        value: newTable,
-        onChange: (e) => setNewTable(e.target.value),
-        placeholder: "Back left, by the window",
-        style: inputStyle()
-      }
-    ))), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", full: true, disabled: busy, onClick: go }, busy ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { color: C.onInk, size: 14 }), " Joining") : "Join"))), err && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.danger, marginTop: S.x150 }) }, err)), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginTop: S.x200, lineHeight: "18px" }) }, "Your notes and anything you keep to yourself stay on this device and are never sent."));
+      tables.map((t) => /* @__PURE__ */ React.createElement("option", { key: t.id, value: t.id }, t.name))
+    )), tables.length === 0 && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, "This class has no tables yet. Ask your teacher to set them up.")), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", full: true, disabled: busy || !tables.some((t) => t.id === tableId), onClick: go }, busy ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { color: C.onInk, size: 14 }), " Joining") : "Join"))), err && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.danger, marginTop: S.x150 }) }, err)), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginTop: S.x200, lineHeight: "18px" }) }, "Your notes and anything you keep to yourself stay on this device and are never sent."));
   }
   function Profile({ identity, session, theme, setTheme, onClose, onLeave }) {
     return /* @__PURE__ */ React.createElement("div", { style: { padding: `${S.x300}px ${S.x250}px` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: S.x200, marginBottom: S.x250 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({
@@ -2267,8 +2292,7 @@ try {
         onProfile: () => setView("profile")
       }
     );
-    return /* @__PURE__ */ React.createElement("div", { style: {
-      height: "100vh",
+    return /* @__PURE__ */ React.createElement("div", { className: "sayit-shell", style: {
       overflow: "hidden",
       background: C.paper,
       display: "flex",
