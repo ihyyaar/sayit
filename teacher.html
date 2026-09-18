@@ -340,6 +340,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
 })();
 
 </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>/* Say it */
 try {
 (() => {
@@ -364,8 +365,8 @@ try {
   var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
   const ANTHROPIC_KEY = "";
   const PROXY_URL = "";
-  const SUPABASE_URL = "";
-  const SUPABASE_ANON_KEY = "";
+  const SUPABASE_URL = "https://oqnnjfmobrnrfpimglln.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_E4jz_jSfbWKsQZ7lneQCLQ_ATdpw6Si";
   const { useState, useEffect, useRef, useMemo } = React;
   const LIGHT = {
     // elevation
@@ -579,22 +580,15 @@ try {
     return Math.round(m / 60) + "h ago";
   }
   const uid = (p) => p + "_" + Math.random().toString(36).slice(2, 9);
-  async function sha256(s) {
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  }
-  const b64e = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   function makeStudentLink(code) {
-    const s = settings();
-    const payload = { c: code };
-    if (s.supabaseUrl && s.supabaseKey) {
-      payload.u = s.supabaseUrl;
-      payload.k = s.supabaseKey;
-    }
-    if (s.proxyUrl) payload.p = s.proxyUrl;
-    return location.origin + location.pathname + "#j=" + b64e(JSON.stringify(payload));
+    return new URL("student.html?c=" + encodeURIComponent(code), location.href).href;
   }
-  const CODE = () => String(Math.floor(1e3 + Math.random() * 9e3));
+  const CODE = () => {
+    const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let s = "";
+    for (let i = 0; i < 6; i++) s += A[Math.floor(Math.random() * A.length)];
+    return s;
+  };
   const LS = {
     get: (k, d) => {
       try {
@@ -617,6 +611,17 @@ try {
       }
     }
   };
+  function resetDevice() {
+    if (!confirm("Reset Say it on this device? This clears the saved sign-in, the class session and local test data. The shared class in Supabase is not touched.")) return;
+    ["sayit:role", "sayit:session", "sayit:identity", "sayit:teacherClass", "sayit:solo", "sayit:demo:v3"].forEach(LS.del);
+    Object.keys(localStorage).filter((k) => k.startsWith("sayit:private:") || k.startsWith("sayit:notes:") || k.startsWith("sayit:tkey:") || k.startsWith("sayit:pulse:")).forEach((k) => {
+      try {
+        localStorage.removeItem(k);
+      } catch (e) {
+      }
+    });
+    location.reload();
+  }
   const settings = () => LS.get("sayit:settings", { supabaseUrl: "", supabaseKey: "", anthropicKey: "", proxyUrl: "" });
   const saveSettings = (s) => LS.set("sayit:settings", s);
   let sb = null;
@@ -797,7 +802,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     const solo = mode === "solo";
     const api = {
       mode,
-      async createClass(name, password) {
+      async createClass(name) {
         if (solo) {
           const d = soloRead();
           const code = CODE();
@@ -808,7 +813,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
             lecture: "",
             current_topic_id: null,
             status: "idle",
-            teacher_key: await sha256(code + ":" + password)
+            teacher_key: uid("k")
           };
           d.klass = klass;
           d.tables = [1, 2, 3, 4].map((n) => ({ id: uid("t"), class_id: klass.id, name: "Table " + n }));
@@ -821,24 +826,18 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           soloWrite(d);
           return klass;
         }
+        const teacher_key = uid("k");
         for (let i = 0; i < 6; i++) {
           const code = CODE();
-          const teacher_key = await sha256(code + ":" + password);
           const { data, error } = await sb.from("classes").insert({ code, teacher_key, name: name || "Class", status: "idle" }).select().single();
           if (!error) {
             await sb.from("tables_").insert([1, 2, 3, 4].map((n) => ({ class_id: data.id, name: "Table " + n })));
+            LS.set("sayit:tkey:" + code, teacher_key);
             return data;
           }
           if (error.code !== "23505") throw error;
         }
         throw new Error("Couldn't allocate a class code.");
-      },
-      async checkTeacher(code, password) {
-        const k = await api.getClass(code);
-        if (!k) throw new Error("No class with that code.");
-        const hash = await sha256(k.code + ":" + password);
-        if (hash !== k.teacher_key) throw new Error("That password doesn't match this class.");
-        return k;
       },
       async getClass(code) {
         if (solo) {
@@ -906,7 +905,10 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           const { error } = await sb.from("anchors").insert(rows);
           if (error) throw error;
         }
-        await api.updateClass(classId, { lecture: lecture || "", current_topic_id: nt[0] ? nt[0].id : null });
+        // classes.lecture does not exist on this database, and nothing renders it.
+        // Including it here made this update fail after the topics, material and
+        // anchors had already been inserted, leaving current_topic_id unset.
+        await api.updateClass(classId, { current_topic_id: nt[0] ? nt[0].id : null });
       },
       async addTable(classId, name) {
         if (solo) {
@@ -1040,9 +1042,19 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           const d = soloRead();
           return d.thoughts.filter((t) => t.visibility === "now" || t.visibility === "later").map((t) => __spreadProps(__spreadValues({}, t), { students: { name: (d.students.find((s) => s.id === t.student_id) || {}).name } }));
         }
-        const { data, error } = await sb.from("thoughts").select("*, students(name)").eq("class_id", classId).order("created_at", { ascending: false });
-        if (error) throw error;
-        return data;
+        // Do not use PostgREST's implicit students embed here. This database has
+        // two thoughts<->students relationships (thoughts_student_id_fkey and the
+        // reactions join table), which makes `students(name)` ambiguous: it answers
+        // HTTP 300 PGRST201 and blanks the whole screen. Fetch the two tables
+        // separately and join them in the browser.
+        const [{ data: thoughts, error: thoughtsError }, { data: roster, error: rosterError }] = await Promise.all([
+          sb.from("thoughts").select("*").eq("class_id", classId).order("created_at", { ascending: false }),
+          sb.from("students").select("id,name").eq("class_id", classId)
+        ]);
+        if (thoughtsError) throw thoughtsError;
+        if (rosterError) throw rosterError;
+        const byId = new Map((roster || []).map((s) => [s.id, s]));
+        return (thoughts || []).map((t) => __spreadProps(__spreadValues({}, t), { students: { name: (byId.get(t.student_id) || {}).name || "Someone" } }));
       },
       async queue(classId) {
         if (solo) return soloRead().queue;
@@ -1077,7 +1089,20 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         (r.data || []).forEach((x) => {
           (by[x.thought_id] = by[x.thought_id] || []).push(x);
         });
-        return (f.data || []).map((t) => __spreadProps(__spreadValues({}, t), { replies: by[t.id] || [] }));
+        const feed = f.data || [];
+        const reactors = {};
+        if (feed.length) {
+          const { data: rx, error: rxError } = await sb.from("reactions").select("thought_id,student_id").in("thought_id", feed.map((t) => t.id));
+          if (rxError) throw rxError;
+          (rx || []).forEach((x) => {
+            (reactors[x.thought_id] = reactors[x.thought_id] || []).push(x.student_id);
+          });
+        }
+        return feed.map((t) => __spreadProps(__spreadValues({}, t), {
+          replies: by[t.id] || [],
+          reacted_by: reactors[t.id] || [],
+          reaction_count: (reactors[t.id] || []).length
+        }));
       },
       async reply(thoughtId, studentId, text) {
         if (solo) {
@@ -1105,7 +1130,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           if (error) throw error;
         } else {
           const { error } = await sb.from("reactions").insert({ thought_id: thoughtId, student_id: studentId });
-          if (error) throw error;
+          if (error && error.code !== "23505") throw error;
         }
       },
       subscribe(classId, onChange, onStatus) {
@@ -1120,7 +1145,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           };
         }
         const poll = setInterval(onChange, 8e3);
-        const ch = sb.channel("class:" + classId).on("postgres_changes", { event: "*", schema: "public", table: "thoughts", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "queue", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "classes", filter: `id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "topics", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "students", filter: `class_id=eq.${classId}` }, onChange).subscribe((status) => {
+        const ch = sb.channel("class:" + classId).on("postgres_changes", { event: "*", schema: "public", table: "thoughts", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "queue", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "classes", filter: `id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "topics", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "students", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "replies" }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, onChange).subscribe((status) => {
           if (onStatus) onStatus(status);
         });
         return () => {
@@ -1173,8 +1198,22 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       color: C.muted
     }) }, "S"), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 15, color: C.ink }) }, "Sachendra Singh Yadav")))), /* @__PURE__ */ React.createElement("main", { style: { maxWidth: 1180, margin: "0 auto", padding: `${S.x300}px ${S.x300}px ${S.x600 || 64}px` } }, children));
   }
-  function CoursesHome({ onStart, openable, onOpen }) {
+  function CoursesHome({ onStart, openable, onOpen, onOpenCode }) {
     const [sem, setSem] = useState("Sem 05");
+    const [code, setCode] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState(null);
+    async function openByCode() {
+      setBusy(true);
+      setErr(null);
+      try {
+        await onOpenCode(code);
+      } catch (e) {
+        setErr(e.message || "Couldn't open that class.");
+      } finally {
+        setBusy(false);
+      }
+    }
     return /* @__PURE__ */ React.createElement("div", { style: { background: C.surface, borderRadius: R.xl, padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 26, lineHeight: "32px", marginBottom: S.x200, color: C.ink }) }, "My Courses"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x300, borderBottom: `1px solid ${C.line}`, marginBottom: S.x300 } }, ["Sem 01", "Sem 02", "Sem 03", "Sem 04", "Sem 05"].map((x) => /* @__PURE__ */ React.createElement(
       "button",
       {
@@ -1249,7 +1288,21 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       },
       /* @__PURE__ */ React.createElement("div", { style: { height: 110, background: "#AFC7BC", display: "flex", alignItems: "center", justifyContent: "center" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 30, color: C.ink, lineHeight: 1 } }, "+")),
       /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({ padding: S.x150 }, F.body), { color: C.ink }) }, "Start a class")
-    )), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x300 } }, /* @__PURE__ */ React.createElement(Btn, null, "View all courses (", COURSES.length, ")")));
+    )), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x300, display: "flex", alignItems: "flex-end", gap: S.x200, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Btn, null, "View all courses (", COURSES.length, ")"), /* @__PURE__ */ React.createElement("div", { style: { marginLeft: "auto", display: "flex", alignItems: "flex-end", gap: S.x100 } }, /* @__PURE__ */ React.createElement(Field, { label: "Open a class you already made" }, /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        className: "focusable",
+        value: code,
+        maxLength: 6,
+        inputMode: "text",
+        autoCapitalize: "characters",
+        autoCorrect: "off",
+        spellCheck: false,
+        onChange: (e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")),
+        placeholder: "ABC123",
+        style: __spreadProps(__spreadValues({}, inputStyle()), { width: 150, letterSpacing: 4, textAlign: "center", fontWeight: 700 })
+      }
+    )), /* @__PURE__ */ React.createElement(Btn, { disabled: code.length !== 6 || busy, onClick: openByCode }, busy ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { size: 14 }), " Opening") : "Open it"))), err && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.danger, marginTop: S.x100, textAlign: "right" }) }, err));
   }
   function CreateClass({ store, onCreated, onBack }) {
     const [name, setName] = useState("");
@@ -1273,7 +1326,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         onClick: async () => {
           setBusy(true);
           try {
-            const k = await store.createClass(name.trim() || "Untitled class", "demo");
+            const k = await store.createClass(name.trim() || "Untitled class");
             onCreated(k);
           } finally {
             setBusy(false);
@@ -1307,7 +1360,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     } }, "Copy student link"), /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: () => {
       navigator.clipboard.writeText(link);
       onToast("Link copied. Paste it into any QR generator to project it.");
-    } }, "Copy QR code")))));
+    } }, "Copy link for QR")))));
   }
   function RunningOrder({ state, store, reload }) {
     return /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { color: C.ink }) }, "The running order"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginTop: S.x025, marginBottom: S.x200 }) }, state.topics.length ? "Tap one to put it on now." : "Nothing yet. Add the deck you're teaching from and the class builds itself."), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x100 } }, state.topics.map((tp) => {
@@ -1380,6 +1433,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     const [draft, setDraft] = useState({});
     const [toast, setToast] = useState(null);
     const [rt, setRt] = useState(null);
+    const [loadErr, setLoadErr] = useState(null);
     useEffect(() => {
       if (!toast) return;
       const id = setTimeout(() => setToast(null), 3200);
@@ -1387,11 +1441,24 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     }, [toast]);
     async function reload() {
       if (!klass) return;
-      const k = await store.getClass(klass.code);
-      if (!k) return;
-      const sh = await store.shape(k.id);
-      const [thoughts, queue, students] = await Promise.all([store.classThoughts(k.id), store.queue(k.id), store.students(k.id)]);
-      setState(__spreadProps(__spreadValues({ klass: k }, sh), { thoughts, queue, students }));
+      try {
+        const k = await store.getClass(klass.code);
+        if (!k) {
+          LS.del("sayit:teacherClass");
+          setKlass(null);
+          setState(null);
+          setScreen("courses");
+          setLoadErr("That class no longer exists. Open another one by code, or start a new class.");
+          return;
+        }
+        const sh = await store.shape(k.id);
+        const [thoughts, queue, students] = await Promise.all([store.classThoughts(k.id), store.queue(k.id), store.students(k.id)]);
+        setState(__spreadProps(__spreadValues({ klass: k }, sh), { thoughts, queue, students }));
+        setLoadErr(null);
+      } catch (e) {
+        console.error("Say it teacher reload failed", e);
+        setLoadErr(e && e.message ? e.message : "Say it couldn't load the class. Check your connection and reload.");
+      }
     }
     useEffect(() => {
       if (!klass) return;
@@ -1405,12 +1472,19 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       return () => stop();
     }, [klass]);
     if (screen === "courses")
-      return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools }, /* @__PURE__ */ React.createElement(
+      return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools }, loadErr && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.danger, background: C.dangerSub, border: `1px solid ${C.line}`, borderRadius: R.lg, padding: `${S.x150}px ${S.x200}px`, marginBottom: S.x200 }) }, loadErr), /* @__PURE__ */ React.createElement(
         CoursesHome,
         {
           onStart: () => setScreen("create"),
           openable,
           onOpen: (k) => {
+            LS.set("sayit:teacherClass", k);
+            setKlass(k);
+            setScreen("board");
+          },
+          onOpenCode: async (c) => {
+            const k = await store.getClass(c);
+            if (!k) throw new Error("No class with that code.");
             LS.set("sayit:teacherClass", k);
             setKlass(k);
             setScreen("board");
@@ -1430,7 +1504,13 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           onBack: () => setScreen("courses")
         }
       ));
-    if (!state) return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools }, /* @__PURE__ */ React.createElement("div", { style: __spreadValues({ padding: S.x600 || 64, textAlign: "center", color: C.muted }, F.body) }, /* @__PURE__ */ React.createElement(Spin, null), " Loading"));
+    if (!state) return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools }, /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 460, margin: "40px auto 0" } }, /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: S.x150 } }, /* @__PURE__ */ React.createElement(Spin, { size: 20 })), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 20, lineHeight: "26px", color: C.ink, marginBottom: S.x100 }) }, "Loading your class"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x250 }) }, "If this stays here, Say it can't reach the saved class."), loadErr && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.danger, background: C.dangerSub, borderRadius: R.md, padding: `${S.x150}px ${S.x200}px`, marginBottom: S.x250, textAlign: "left" }) }, loadErr), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, justifyContent: "center" } }, /* @__PURE__ */ React.createElement(Btn, { onClick: () => {
+      LS.del("sayit:teacherClass");
+      setKlass(null);
+      setState(null);
+      setLoadErr(null);
+      setScreen("courses");
+    } }, "Back to my courses"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: resetDevice }, "Reset this device")))));
     const topic = state.topics.find((t) => t.id === state.klass.current_topic_id);
     const pulse = topic ? store.pulse(state.klass.id, topic.id) : {};
     const followingN = Object.values(pulse).filter((v) => v === 1).length;
@@ -1801,14 +1881,8 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         saveSettings(s);
         onSaved();
       } }, "Save"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: onClose }, "Cancel"), /* @__PURE__ */ React.createElement("div", { style: { marginLeft: "auto" } }, /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => {
-        if (confirm("Reset the demo?")) {
-          LS.del(soloKey);
-          LS.del("sayit:session");
-          LS.del("sayit:teacherClass");
-          LS.del("sayit:identity");
-          location.reload();
-        }
-      } }, "Reset demo"))))
+        resetDevice();
+      } }, "Reset this device"))))
     );
   }
   const DEMO_KEY = "sayit:demo:v3";
@@ -1910,7 +1984,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     const cloud = conn.state === "connected";
     const store = useMemo(() => makeStore(cloud ? "cloud" : "solo"), [cloud]);
     useEffect(() => {
-      if (!cloud) {
+      if (!CONNECTED && !cloud) {
         if (!LS.get(DEMO_KEY, false)) seedDemo();
         const d = soloRead();
         setDemoClass(d.klass || null);
@@ -1926,7 +2000,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       setThemeState(t);
     };
     if (!ready) return null;
-    const tools = /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", gap: S.x050, alignItems: "center" } }, !cloud && /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), {
+    const tools = /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", gap: S.x050, alignItems: "center" } }, !CONNECTED && !cloud && /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), {
       fontWeight: 600,
       color: C.muted,
       background: C.sunken,
@@ -1934,6 +2008,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       borderRadius: R.full,
       padding: `${S.x050}px ${S.x100}px`
     }) }, "demo"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => setTheme(theme === "dark" ? "light" : "dark") }, theme === "dark" ? "Light" : "Dark"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => setShowSettings(true) }, aiReady() ? "AI on" : "AI off"));
+    if (CONNECTED && !cloud) return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools }, /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 460, margin: "40px auto 0" } }, /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 20, lineHeight: "26px", color: C.ink, marginBottom: S.x100 }) }, "Can't reach Say it"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.body, marginBottom: S.x150 }) }, conn.reason || "The connection to the class database isn't available."), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x250 }) }, "Check you are online and reload. Nothing you have written has been lost."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", onClick: () => location.reload() }, "Reload"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: resetDevice }, "Reset this device")))));
     return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(TeacherApp, { store, openable: demoClass, tools }), showSettings && /* @__PURE__ */ React.createElement(
       Settings,
       {
