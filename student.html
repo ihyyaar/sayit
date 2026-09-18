@@ -403,7 +403,7 @@ try {
     focus: "#4688EC",
     // color.border.focused
     // roles
-    now: "#1558BC",
+    now: "#2e4060",
     // brand bold  — Blue800, a deeper blue
     nowSub: "#E9F2FE",
     // brand subtlest
@@ -1479,6 +1479,27 @@ try {
       "Unsend"
     )));
   }
+  // Size the in-class outline to exactly three topic rows/cards: the one before
+  // the current topic, the current topic, and the next one (or the last three
+  // available, near either end). Earlier topics stay reachable by scrolling up
+  // inside the outline. Measured from the rendered rows rather than set as a
+  // share of the screen, so it holds whatever height the current card's
+  // subtopics give it.
+  function fitOutline(box, card, styleOf) {
+    const items = Array.from(box.children);
+    const ci = items.indexOf(card);
+    if (ci < 0) return null;
+    const end = Math.min(items.length - 1, ci + 1);
+    const start = Math.max(0, end - 2);
+    const cs = styleOf(box);
+    const px = (k) => parseFloat(cs[k]) || 0;
+    const bt = px("borderTopWidth"), bb = px("borderBottomWidth"), pt = px("paddingTop"), pb = px("paddingBottom");
+    const origin = box.getBoundingClientRect().top + bt - box.scrollTop;
+    const y = (el) => el.getBoundingClientRect().top - origin;
+    const top = y(items[start]);
+    const bottom = y(items[end]) + items[end].getBoundingClientRect().height;
+    return { height: Math.ceil(bt + pt + (bottom - top) + pb + bb), scrollTop: Math.max(0, Math.round(top - pt)), start, end };
+  }
   function StudentApp({ store, me, klassCode, onProfile }) {
     const [state, setState] = useState(null);
     const [text, setText] = useState("");
@@ -1548,6 +1569,28 @@ try {
         };
       };
     }, [me.table_id]);
+    const curRef = useRef(null);
+    const [outlineH, setOutlineH] = useState(null);
+    const [viewport, setViewport] = useState("");
+    useEffect(() => {
+      const onResize = () => setViewport(window.innerWidth + "x" + window.innerHeight);
+      window.addEventListener("resize", onResize);
+      return () => window.removeEventListener("resize", onResize);
+    }, []);
+    // Re-fit only when the outline's structure changes (current topic, session
+    // state, topics or their subtopic counts) or the window is resized, so it
+    // never fights a student scrolling back through earlier topics.
+    const outlineKey = state ? [state.klass.current_topic_id, state.klass.status, state.topics.map((t) => t.id + ":" + (t.subtopics || []).length).join(",")].join("|") : "";
+    React.useLayoutEffect(() => {
+      const card = curRef.current;
+      const box = card && card.parentElement;
+      if (!card || !box) return;
+      const fit = fitOutline(box, card, window.getComputedStyle);
+      if (!fit) return;
+      box.style.height = fit.height + "px";
+      box.scrollTop = fit.scrollTop;
+      setOutlineH(fit.height);
+    }, [outlineKey, viewport]);
     const suggestions = useMemo(
       () => !state || dismissed ? [] : suggestAnchors(state.anchors, state.materials, text, state.klass.current_topic_id),
       [state, text, dismissed]
@@ -1557,7 +1600,7 @@ try {
     const topics = state.topics;
     const idx = topics.findIndex((t) => t.id === state.klass.current_topic_id);
     const current = idx >= 0 ? topics[idx] : null;
-    const previous = idx > 0 ? topics[idx - 1] : null;
+    const earlier = idx > 0 ? topics.slice(0, idx) : [];
     const next = idx >= 0 && idx < topics.length - 1 ? topics[idx + 1] : null;
     const mine = state.thoughts.filter((t) => t.student_id === me.id);
     const mates = state.students.filter((s) => s.table_id === me.table_id);
@@ -1669,14 +1712,16 @@ try {
     });
     const subs = current ? current.subtopics || [] : [];
     // -1 is the topic itself, which is what a topic with no subtopics votes on.
-    const myVote = (idx) => {
-      const row = (state.pulses || []).find((p) => current && p.topic_id === current.id && p.subtopic_idx === idx && p.student_id === me.id);
+    // This student's own vote on one slice of the outline. Defaults to the
+    // current topic; the post-class review passes any covered topic.
+    const myVote = (idx, topicId = current && current.id) => {
+      const row = (state.pulses || []).find((p) => topicId && p.topic_id === topicId && p.subtopic_idx === idx && p.student_id === me.id);
       return row ? row.value : void 0;
     };
-    async function setPulse(idx, v) {
-      if (!current) return;
+    async function setPulse(idx, v, topicId = current && current.id) {
+      if (!topicId) return;
       try {
-        await store.setPulse(state.klass.id, current.id, idx, me.id, v);
+        await store.setPulse(state.klass.id, topicId, idx, me.id, v);
         await refresh();
       } catch (e) {
         setToast({ bad: true, text: "Couldn't send that." });
@@ -1684,8 +1729,8 @@ try {
       setTick((n) => n + 1);
     }
     // The same pair of buttons in both places, so the two read as one control.
-    const Thumbs = ({ idx, size }) => /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x050, flexShrink: 0 } }, [[1, "Following this"], [-1, "Lost me"]].map(([v, label]) => {
-      const on = myVote(idx) === v;
+    const Thumbs = ({ idx, size, topicId, light }) => /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x050, flexShrink: 0 } }, [[1, "Following this"], [-1, "Lost me"]].map(([v, label]) => {
+      const on = myVote(idx, topicId || current && current.id) === v;
       return /* @__PURE__ */ React.createElement(
         "button",
         {
@@ -1694,7 +1739,7 @@ try {
           title: label,
           "aria-label": label,
           "aria-pressed": on,
-          onClick: () => setPulse(idx, v),
+          onClick: () => setPulse(idx, v, topicId || current && current.id),
           style: {
             width: size,
             height: size,
@@ -1703,14 +1748,33 @@ try {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            border: `1px solid ${on ? "transparent" : C.onInkLine}`,
-            background: on ? C.onInk : "transparent",
+            border: `1px solid ${on ? "transparent" : light ? C.line : C.onInkLine}`,
+            background: on ? light ? C.now : C.onInk : light ? C.surface : "transparent",
             transition: `background-color 150ms ${EASE}`
           }
         },
-        /* @__PURE__ */ React.createElement(ThumbIcon, { down: v === -1, color: on ? C.now : C.onInk })
+        /* @__PURE__ */ React.createElement(ThumbIcon, { down: v === -1, color: on ? light ? C.onInk : C.now : light ? C.body : C.onInk })
       );
     }));
+    // After the faculty ends the session: the whole covered outline, so the
+    // student can finish their feedback. "Covered" is every topic up to and
+    // including the last current topic; the immediate next and anything later
+    // were never taught, so they are not offered. Each row is exactly the unit
+    // rated in class: a subtopic, or the topic itself when it has none
+    // (subtopic_idx -1). Votes are the student's own topic_pulse rows.
+    const reviewing = state.klass.status === "ended" && !!current;
+    const covered = reviewing ? topics.slice(0, idx + 1) : [];
+    const toRate = covered.flatMap((tp) => (tp.subtopics || []).length ? tp.subtopics.map((s, i) => ({ tp, i, label: s })) : [{ tp, i: -1, label: `Topic ${tp.ord} \xB7 ${tp.title}` }]);
+    const unrated = toRate.filter((r) => myVote(r.i, r.tp.id) === void 0).length;
+    const rateRow = (r) => {
+      const open = myVote(r.i, r.tp.id) === void 0;
+      return /* @__PURE__ */ React.createElement("div", { key: r.tp.id + ":" + r.i, style: { display: "flex", alignItems: "center", gap: S.x100, padding: `${S.x075}px ${S.x150}px`, borderRadius: R.md, background: open ? C.nowSub : "transparent" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, r.label), open && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.now, fontWeight: 600 }) }, "Not rated yet")), /* @__PURE__ */ React.createElement(Thumbs, { idx: r.i, topicId: r.tp.id, size: 24, light: true }));
+    };
+    const reviewList = reviewing ? [
+      /* @__PURE__ */ React.createElement("div", { key: "prompt", style: { position: "sticky", top: -S.x050, zIndex: 1, background: C.sunken, padding: `${S.x100}px ${S.x150}px`, marginBottom: S.x050, borderBottom: `1px solid ${C.line}` } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.ink }) }, "Rate what this class covered"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: unrated ? C.now : C.muted, marginTop: S.x025 }) }, unrated ? `${unrated} of ${toRate.length} still to rate. You can change any answer.` : "All rated. You can still change any answer."))
+    ].concat(covered.flatMap((tp) => (tp.subtopics || []).length ? [
+      /* @__PURE__ */ React.createElement("div", { key: tp.id + ":h", style: __spreadProps(__spreadValues({}, F.small), { fontWeight: 700, color: C.ink, padding: `${S.x100}px ${S.x150}px ${S.x025}px` }) }, `Topic ${tp.ord} \xB7 ${tp.title}`)
+    ].concat(tp.subtopics.map((s, i) => rateRow({ tp, i, label: s }))) : [rateRow({ tp, i: -1, label: `Topic ${tp.ord} \xB7 ${tp.title}` })])) : null;
     const TopicRow = ({ t, tone }) => /* @__PURE__ */ React.createElement("div", { style: { padding: `${S.x100}px ${S.x150}px`, display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), {
       color: C.muted,
       overflow: "hidden",
@@ -1746,12 +1810,12 @@ try {
         })
       },
       (me.name || "?").slice(0, 1).toUpperCase()
-    )), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: S.x150, gap: S.x150, overflowY: "auto" } }, loadErr && /* @__PURE__ */ React.createElement(Banner, { tone: "bad", title: "Can't reach the class" }, loadErr), current && /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x050, flexShrink: 0, maxHeight: "32vh", overflowY: "auto", overscrollBehavior: "contain" } }, previous && /* @__PURE__ */ React.createElement(TopicRow, { t: previous, tone: "done" }), current ? /* @__PURE__ */ React.createElement("div", { style: { background: C.now, borderRadius: R.md, padding: `${S.x100}px ${S.x150}px` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: S.x100 } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.onInk }) }, current.title)), subs.length === 0 && /* @__PURE__ */ React.createElement(Thumbs, { idx: -1, size: 28 })), subs.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x100 } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("div", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.small), {
+    )), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: S.x150, gap: S.x150, overflowY: "auto" } }, loadErr && /* @__PURE__ */ React.createElement(Banner, { tone: "bad", title: "Can't reach the class" }, loadErr), current && /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x050, flexShrink: 0, height: !reviewing && outlineH ? outlineH : void 0, maxHeight: "50vh", overflowY: "auto", overscrollBehavior: "contain" } }, reviewing ? reviewList : earlier.map((t) => /* @__PURE__ */ React.createElement(TopicRow, { key: t.id, t, tone: "done" })), !reviewing && current ? /* @__PURE__ */ React.createElement("div", { ref: curRef, style: { background: C.now, borderRadius: R.md, padding: `${S.x100}px ${S.x150}px` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: S.x100 } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.onInk }) }, current.title)), subs.length === 0 && /* @__PURE__ */ React.createElement(Thumbs, { idx: -1, size: 28 })), subs.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x100 } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("div", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.small), {
       color: C.onInk,
       background: C.onInkLine,
       borderRadius: R.sm,
       padding: `${S.x025}px ${S.x075}px`
-    }) }, st), /* @__PURE__ */ React.createElement(Thumbs, { idx, size: 24 }))))) : null, next && /* @__PURE__ */ React.createElement(TopicRow, { t: next, tone: "next" })), /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x150, flexShrink: 0 } }, /* @__PURE__ */ React.createElement(
+    }) }, st), /* @__PURE__ */ React.createElement(Thumbs, { idx, size: 24 }))))) : null, !reviewing && next && /* @__PURE__ */ React.createElement(TopicRow, { t: next, tone: "next" })), /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x150, flexShrink: 0 } }, /* @__PURE__ */ React.createElement(
       "textarea",
       {
         ref: boxRef,
