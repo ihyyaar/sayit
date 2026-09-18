@@ -1,0 +1,1420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Say it</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #EDF0EE; font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; color: #16211D; }
+  .thought { font-family: 'Newsreader', Georgia, serif; }
+  button { font-family: inherit; cursor: pointer; }
+  textarea, input, select { font-family: inherit; }
+  .focusable:focus-visible { outline: 3px solid #1F5B9E; outline-offset: 2px; }
+  @keyframes pulseSoft { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  .livedot { animation: pulseSoft 1.8s ease-in-out infinite; }
+  .spinner { animation: spin .8s linear infinite; }
+  .split { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
+  .split-even { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .split, .split-even { grid-template-columns: 1fr; } }
+  #boot { max-width: 620px; margin: 60px auto; padding: 26px; background: #fff; border: 1px solid #E6EAE7; border-radius: 14px; line-height: 1.6; }
+  #boot code { background:#EDF0EE; padding:2px 6px; border-radius:5px; font-size:14px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<div id="boot">
+  <div style="font-size:20px;font-weight:600;margin-bottom:10px">Loading Say it…</div>
+  <div id="bootmsg" style="color:#3C4A44;font-size:15px">
+    If this message is still here after a few seconds, the page couldn't reach the libraries it needs.
+    Check you're online. If you opened this by double-clicking and it still won't load, run a tiny local
+    server from the folder these files are in and open it from there:
+    <div style="margin-top:10px"><code>python3 -m http.server 8000</code></div>
+    <div style="margin-top:8px">then go to <code>http://localhost:8000/index.html</code></div>
+  </div>
+</div>
+
+<script>
+  window.addEventListener("error", function (e) {
+    var b = document.getElementById("bootmsg");
+    if (b) b.innerHTML = '<b style="color:#B24A18">Something went wrong loading Say it.</b><br>' +
+      '<span style="font-size:14px">' + (e.message || e.error || "Unknown browser error") + '</span>' +
+      '<div style="margin-top:12px;font-size:14px">If this is the shared link, first try a normal reload. If the page is completely blank, the browser may be blocking one of the public libraries Say it needs.</div>';
+  });
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ==================================================================
+   PASTE YOUR KEY HERE, ONCE
+   ==================================================================
+
+   Only two things need this: reading a PDF deck automatically instead
+   of typing the outline, and rewording a student's question. Everything
+   else works with both of these left empty.
+
+   ANTHROPIC_KEY
+     Fine to fill in on teacher.html, on your own laptop.
+     Do NOT fill it in on the student.html you hand out. Anyone who opens
+     that file can read the key out of it and spend your credit.
+
+   PROXY_URL
+     The safe way to give students the rewording feature. Deploy the
+     project in say-it/ (it has api/claude.js), then put its address here,
+     for example "https://your-app.vercel.app/api/claude". The key stays
+     on the server and never reaches anyone's browser.
+
+   Fill in one or the other, not both. Settings in the app overrides these.
+*/
+
+const ANTHROPIC_KEY = "";
+const PROXY_URL = "";
+
+
+const { useState, useEffect, useRef, useMemo } = React;
+
+/* ================================================================= theme */
+
+const C = { paper:"#EDF0EE", surface:"#FFF", ink:"#16211D", body:"#3C4A44", muted:"#77837D",
+  line:"#D6DCD8", lineSoft:"#E6EAE7", now:"#B24A18", later:"#1F5B9E", table:"#2F6B47",
+  private:"#5D6B78", live:"#C0392B" };
+
+const ACTIONS = {
+  now:     { key:"now",     label:"Say now",          color:C.now,     blurb:"You'll say it out loud. The teacher knows it's coming." },
+  later:   { key:"later",   label:"Ask later",        color:C.later,   blurb:"Goes to the after-class queue." },
+  table:   { key:"table",   label:"Share with table", color:C.table,   blurb:"Only your table. The teacher can't see it." },
+  private: { key:"private", label:"Keep private",     color:C.private, blurb:"Stays on this device. Never sent anywhere." },
+};
+
+const Btn = ({children,onClick,tone="quiet",disabled,full,small}) => {
+  const base = { border:"1px solid transparent", borderRadius:10, padding: small?"8px 13px":"12px 19px",
+    fontSize: small?14:16, fontWeight:500, width: full?"100%":undefined, opacity: disabled?0.45:1 };
+  const tones = { solid:{background:C.ink,color:"#fff"}, quiet:{background:"transparent",color:C.body,borderColor:C.line},
+    ghost:{background:"transparent",color:C.muted,borderColor:"transparent",padding:small?"6px 8px":"8px 10px"} };
+  const style = typeof tone === "object" ? {...base, background:tone.bg, color:tone.fg} : {...base, ...tones[tone]};
+  return <button className="focusable" style={style} onClick={onClick} disabled={disabled}>{children}</button>;
+};
+const Tag = ({children,color=C.muted,filled}) => <span style={{display:"inline-block",fontSize:12,fontWeight:500,padding:"3px 9px",borderRadius:999,color:filled?"#fff":color,background:filled?color:"transparent",border:`1px solid ${filled?color:C.line}`}}>{children}</span>;
+const Card = ({children,style}) => <div style={{background:C.surface,border:`1px solid ${C.lineSoft}`,borderRadius:14,...style}}>{children}</div>;
+const Spin = ({color=C.muted,size=15}) => <span className="spinner" style={{display:"inline-block",width:size,height:size,border:`2px solid ${color}`,borderTopColor:"transparent",borderRadius:"50%"}} />;
+const inputStyle = { width:"100%", fontSize:16, padding:"12px 14px", borderRadius:10, border:`1px solid ${C.line}`, background:C.surface, color:C.ink };
+const Field = ({label,hint,children}) => <div><div style={{fontSize:13,color:C.muted,marginBottom:6}}>{label}</div>{children}{hint && <div style={{fontSize:12,color:C.muted,marginTop:6}}>{hint}</div>}</div>;
+const Empty = ({title,body}) => <Card style={{padding:28,textAlign:"center"}}><div style={{fontSize:18,color:C.ink,marginBottom:6}}>{title}</div><div style={{fontSize:15,color:C.muted,lineHeight:1.5}}>{body}</div></Card>;
+const Toast = ({message}) => !message ? null : <div style={{position:"fixed",left:16,right:16,bottom:20,display:"flex",justifyContent:"center",zIndex:60}}><div style={{background:C.ink,color:"#fff",borderRadius:12,padding:"14px 18px",fontSize:15,maxWidth:520}}>{message}</div></div>;
+const Tabs = ({value,onChange,items}) => (
+  <div style={{display:"flex",gap:4,borderBottom:`1px solid ${C.line}`,marginBottom:20,flexWrap:"wrap"}}>
+    {items.map(([k,lab]) => <button key={k} className="focusable" onClick={()=>onChange(k)}
+      style={{border:"none",background:"transparent",padding:"11px 14px",fontSize:16,fontWeight:value===k?600:400,color:value===k?C.ink:C.muted,borderBottom:`2px solid ${value===k?C.ink:"transparent"}`,marginBottom:-1}}>{lab}</button>)}
+  </div>
+);
+const relTime = (ts) => { const m = Math.round((Date.now()-new Date(ts).getTime())/60000);
+  return m<1?"just now":m===1?"1 min ago":m<60?m+" min ago":Math.round(m/60)+" hr ago"; };
+
+/* ================================================================= storage */
+
+const uid = (p) => p+"_"+Math.random().toString(36).slice(2,9);
+const CODE = () => { const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s=""; for(let i=0;i<6;i++) s+=A[Math.floor(Math.random()*A.length)]; return s; };
+const LS = {
+  get:(k,d)=>{ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch{ return d; } },
+  set:(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} },
+  del:(k)=>{ try{ localStorage.removeItem(k); }catch{} },
+};
+
+const DEFAULT_SUPABASE_URL = "https://oqnnjfmobrnrfpimglln.supabase.co";
+const DEFAULT_SUPABASE_KEY = "sb_publishable_E4jz_jSfbWKsQZ7lneQCLQ_ATdpw6Si";
+const settings = () => {
+  const saved = LS.get("sayit:settings", {});
+  return {
+    supabaseUrl: saved.supabaseUrl || DEFAULT_SUPABASE_URL,
+    supabaseKey: saved.supabaseKey || DEFAULT_SUPABASE_KEY,
+    anthropicKey: saved.anthropicKey || "",
+    proxyUrl: saved.proxyUrl || ""
+  };
+};
+const saveSettings = (s) => LS.set("sayit:settings", s);
+
+let sb = null;
+function initSupabase() {
+  const s = settings();
+  if (s.supabaseUrl && s.supabaseKey && window.supabase) {
+    try { sb = window.supabase.createClient(s.supabaseUrl, s.supabaseKey); return true; } catch { return false; }
+  }
+  return false;
+}
+
+/* ---- solo store: one browser, no server. Good enough to try the whole flow. */
+
+const soloKey = "sayit:solo";
+const soloRead  = () => LS.get(soloKey, { klass:null, topics:[], materials:[], anchors:[], tables:[], students:[], thoughts:[], queue:[], replies:[], reactions:[] });
+const soloWrite = (d) => { LS.set(soloKey, d); window.dispatchEvent(new Event("solo-change")); };
+
+/* ================================================================= AI */
+
+const aiKey   = () => (settings().anthropicKey || ANTHROPIC_KEY || "").trim();
+const aiProxy = () => (settings().proxyUrl || PROXY_URL || "").trim();
+const aiReady = () => Boolean(aiKey() || aiProxy());
+
+async function callClaude(content, maxTokens=2000) {
+  const proxy = aiProxy();
+
+  // A proxy keeps the key on a server, so students can use this too.
+  if (proxy) {
+    const res = await fetch(proxy, {
+      method:"POST",
+      headers:{ "content-type":"application/json" },
+      body: JSON.stringify({ content, max_tokens:maxTokens }),
+    });
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok) throw new Error(data.error || "The server couldn't reach the model.");
+    if (data.text) return data.text;
+    return (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+  }
+
+  const key = aiKey();
+  if (!key) throw new Error("No key set up for this. Add one in Settings, or type the outline in yourself — everything else works without it.");
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{ "content-type":"application/json", "x-api-key":key, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" },
+    body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:maxTokens, messages:[{role:"user",content}] }),
+  });
+  const data = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error((data.error && data.error.message) || "The request failed.");
+  return (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+}
+
+function salvage(text){ const out=[]; let d=0,st=-1,ins=false,esc=false;
+  for(let i=0;i<text.length;i++){ const ch=text[i];
+    if(ins){ if(esc)esc=false; else if(ch==="\\")esc=true; else if(ch==='"')ins=false; continue; }
+    if(ch==='"'){ins=true;continue;}
+    if(ch==="{"){ if(d===0)st=i; d++; } else if(ch==="}"){ d--; if(d===0&&st>=0){ try{out.push(JSON.parse(text.slice(st,i+1)));}catch{} st=-1; } } }
+  return out; }
+
+function parseJSON(raw){ const c=raw.replace(/```json/gi,"").replace(/```/g,"").trim();
+  const s=c.search(/[[{]/), e=Math.max(c.lastIndexOf("]"),c.lastIndexOf("}"));
+  try { return JSON.parse(s>=0&&e>s?c.slice(s,e+1):c); }
+  catch(err){ const v=salvage(c); if(v.length) return v; throw err; } }
+
+const fileB64 = (f) => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(",")[1]); r.onerror=()=>rej(new Error("Couldn't read the file.")); r.readAsDataURL(f); });
+const fileTxt = (f) => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result||"")); r.onerror=()=>rej(new Error("Couldn't read the file.")); r.readAsText(f); });
+
+const SYLLABUS = 'This is the deck a lecturer is about to teach from. Derive the running order of the class.\n\nReturn ONLY JSON, no fences: {"lecture":"...","topics":[{"title":"...","subtopics":["..."],"anchors":[{"label":"...","text":"..."}]}]}\n\n"lecture" under 50 chars. At most 7 topics, titles under 45 chars, in the deck\'s own words. At most 3 subtopics each, under 5 words. At most 4 anchors per topic: "label" is where it is plus the heading, under 55 chars, using the deck\'s own slide numbers; "text" is ONE sentence of at most 16 words keeping the distinctive nouns.\n\nBe terse. Long values get cut off. Skip title slides, contents and references.';
+
+async function readDeck({file,text}) {
+  const content = file
+    ? [{type:"document",source:{type:"base64",media_type:"application/pdf",data:await fileB64(file)}},{type:"text",text:SYLLABUS}]
+    : SYLLABUS+"\n\nThe deck:\n\n"+text.slice(0,24000);
+  const out = parseJSON(await callClaude(content,3000));
+  let lecture="", raw=[];
+  if (Array.isArray(out)) raw = out.filter(t=>t&&t.title);
+  else if (out && Array.isArray(out.topics)) { lecture=out.lecture||""; raw=out.topics.filter(t=>t&&t.title); }
+  const topics = raw.slice(0,8).map(t=>({ key:uid("k"), title:String(t.title).slice(0,70),
+    subtopics:(t.subtopics||[]).slice(0,4).map(x=>String(x).slice(0,40)),
+    anchors:(t.anchors||[]).filter(a=>a&&a.label&&a.text).slice(0,5).map(a=>({label:String(a.label).slice(0,90),text:String(a.text).slice(0,300)})) }));
+  if (!topics.length) throw new Error("No running order came out of that. Try the PDF export, or type the outline in.");
+  return { lecture:String(lecture).slice(0,80), topics };
+}
+
+async function reframe(q) {
+  const brief = "A student wants to ask this out loud in class but isn't happy with the wording.\n\nRewrite it so it is easier to say and easier to follow. Do not change what is being asked. Do not add anything they did not write. Do not make it longer or more formal. Keep their voice.\n\nReturn ONLY a JSON array of exactly two strings, no fences.\n\nTheir words: "+q;
+  const out = parseJSON(await callClaude(brief,600));
+  return (Array.isArray(out)?out:[]).map(String).slice(0,2);
+}
+
+/* ---- outline typed by hand, no AI needed ---- */
+function outlineToTopics(text) {
+  const topics = [];
+  text.split("\n").forEach((raw) => {
+    const line = raw.replace(/\s+$/,"");
+    if (!line.trim()) return;
+    const indented = /^(\s{2,}|\t|[-*•])/.test(line);
+    const clean = line.replace(/^[\s\-*•]+/,"").trim();
+    if (!clean) return;
+    if (!indented || !topics.length) topics.push({ key:uid("k"), title:clean.slice(0,70), subtopics:[], anchors:[{label:clean.slice(0,90),text:clean}] });
+    else {
+      const t = topics[topics.length-1];
+      if (t.subtopics.length < 3) t.subtopics.push(clean.slice(0,40));
+      t.anchors.push({ label:clean.slice(0,90), text:clean });
+    }
+  });
+  return topics;
+}
+
+/* ================================================================= matching */
+
+const STOP = new Set("a an and are as at be but by can could do does for from get has have how i if in is it its me my not of on or our so than that this to was we what when where which who why will with would you your about into more some just like really actually".split(" "));
+const words = (s) => String(s||"").toLowerCase().replace(/[^a-z\s]/g," ").split(/\s+/).filter(w=>w.length>3&&!STOP.has(w));
+
+function suggestAnchors(anchors, materials, text, topicId) {
+  const q = words(text); if (q.length<2) return [];
+  const qs = new Set(q);
+  return anchors.map(a=>{ const as=new Set(words(a.label+" "+(a.body||"")));
+      let hits=0; qs.forEach(w=>{ if(as.has(w)) hits++; });
+      const mat = materials.find(m=>m.id===a.material_id);
+      return {...a, materialTitle: mat?mat.title:"", hits, score: hits/Math.sqrt(qs.size) + (a.topic_id===topicId?0.35:0)};
+    }).filter(a=>a.hits>=1).sort((a,b)=>b.score-a.score).slice(0,3);
+}
+
+function groupSimilar(list) {
+  const items = list.map(t=>({t,k:new Set(words(t.text))})); const used=new Set(); const groups=[];
+  for (let i=0;i<items.length;i++){ if(used.has(items[i].t.id)) continue;
+    const cl=[items[i].t]; used.add(items[i].t.id);
+    for (let j=i+1;j<items.length;j++){ if(used.has(items[j].t.id)) continue;
+      let sh=0; items[j].k.forEach(w=>{ if(items[i].k.has(w)) sh++; });
+      const sameAnchor = items[i].t.anchor_id && items[i].t.anchor_id===items[j].t.anchor_id;
+      if (sameAnchor || sh>=2){ cl.push(items[j].t); used.add(items[j].t.id); } }
+    if (cl.length>1) groups.push(cl); }
+  return groups;
+}
+
+/* ================================================================= store */
+// Two backends, same methods. Solo keeps everything in this browser.
+// Cloud talks to Supabase and syncs across devices.
+
+function makeStore(mode) {
+  const solo = mode === "solo";
+
+  const api = {
+    mode,
+
+    async createClass(name) {
+      if (solo) {
+        const d = soloRead();
+        const klass = { id:uid("c"), code:CODE(), name:name||"Class", lecture:"", current_topic_id:null, status:"idle" };
+        d.klass = klass;
+        d.tables = [1,2,3,4].map(n=>({ id:uid("t"), class_id:klass.id, name:"Table "+n }));
+        d.topics=[]; d.materials=[]; d.anchors=[]; d.students=[]; d.thoughts=[]; d.queue=[];
+        soloWrite(d);
+        return klass;
+      }
+      const teacher_key = uid("k");
+      for (let i=0;i<6;i++) {
+        const code = CODE();
+        const { data, error } = await sb.from("classes").insert({ code, teacher_key, name:name||"Class", status:"idle" }).select().single();
+        if (!error) {
+          await sb.from("tables_").insert([1,2,3,4].map(n=>({ class_id:data.id, name:"Table "+n })));
+          LS.set("sayit:tkey:"+code, teacher_key);
+          return data;
+        }
+        if (error.code !== "23505") throw error;
+      }
+      throw new Error("Couldn't allocate a class code.");
+    },
+
+    async getClass(code) {
+      if (solo) { const d=soloRead(); return d.klass && d.klass.code===code.toUpperCase() ? d.klass : null; }
+      const { data, error } = await sb.from("classes").select("*").eq("code", code.toUpperCase()).maybeSingle();
+      if (error) throw error; return data;
+    },
+
+    async updateClass(id, patch) {
+      if (solo) { const d=soloRead(); d.klass={...d.klass,...patch}; soloWrite(d); return; }
+      const { error } = await sb.from("classes").update(patch).eq("id", id); if (error) throw error;
+    },
+
+    async shape(classId) {
+      if (solo) { const d=soloRead(); return { topics:d.topics, materials:d.materials, anchors:d.anchors, tables:d.tables }; }
+      const [t,m,a,tb] = await Promise.all([
+        sb.from("topics").select("*").eq("class_id",classId).order("ord"),
+        sb.from("materials").select("*").eq("class_id",classId),
+        sb.from("anchors").select("*").eq("class_id",classId).order("ord"),
+        sb.from("tables_").select("*").eq("class_id",classId),
+      ]);
+      for (const r of [t,m,a,tb]) if (r.error) throw r.error;
+      return { topics:t.data, materials:m.data, anchors:a.data, tables:tb.data };
+    },
+
+    async setRunningOrder(classId, { lecture, topics, deckTitle }) {
+      if (solo) {
+        const d = soloRead();
+        d.topics = topics.map((t,i)=>({ id:uid("tp"), class_id:classId, title:t.title, subtopics:t.subtopics||[], ord:i+1 }));
+        d.materials = d.materials.filter(m=>m.source!=="deck");
+        d.anchors  = d.anchors.filter(a=> d.materials.some(m=>m.id===a.material_id));
+        const deck = { id:uid("m"), class_id:classId, topic_id:null, title:deckTitle, type:"pdf", source:"deck" };
+        d.materials.unshift(deck);
+        topics.forEach((t,i)=>(t.anchors||[]).forEach((a,j)=>d.anchors.push({
+          id:uid("a"), class_id:classId, material_id:deck.id, topic_id:d.topics[i].id, label:a.label, body:a.text||"", ord:j })));
+        d.klass = { ...d.klass, lecture: lecture||d.klass.lecture, current_topic_id: d.topics[0]?d.topics[0].id:null };
+        soloWrite(d); return;
+      }
+      await sb.from("materials").delete().eq("class_id",classId).eq("source","deck");
+      await sb.from("topics").delete().eq("class_id",classId);
+      const { data:nt, error:te } = await sb.from("topics").insert(topics.map((t,i)=>({ class_id:classId, title:t.title, subtopics:t.subtopics||[], ord:i+1 }))).select();
+      if (te) throw te;
+      const { data:deck, error:me } = await sb.from("materials").insert({ class_id:classId, title:deckTitle, type:"pdf", source:"deck" }).select().single();
+      if (me) throw me;
+      const rows=[]; topics.forEach((t,i)=>(t.anchors||[]).forEach((a,j)=>rows.push({ class_id:classId, material_id:deck.id, topic_id:nt[i]?nt[i].id:null, label:a.label, body:a.text||"", ord:j })));
+      if (rows.length) { const {error}=await sb.from("anchors").insert(rows); if (error) throw error; }
+      await api.updateClass(classId, { lecture:lecture||"", current_topic_id: nt[0]?nt[0].id:null });
+    },
+
+    async addTable(classId, name) {
+      if (solo) { const d=soloRead(); const t={id:uid("t"),class_id:classId,name}; d.tables.push(t); soloWrite(d); return t; }
+      const { data, error } = await sb.from("tables_").insert({ class_id:classId, name }).select().single(); if (error) throw error; return data;
+    },
+    async renameTable(id,name) {
+      if (solo) { const d=soloRead(); d.tables=d.tables.map(t=>t.id===id?{...t,name}:t); soloWrite(d); return; }
+      const { error } = await sb.from("tables_").update({name}).eq("id",id); if (error) throw error;
+    },
+    async join(classId,{name,tableId}) {
+      if (solo) { const d=soloRead(); const s={id:uid("s"),class_id:classId,name,table_id:tableId}; d.students.push(s); soloWrite(d); return s; }
+      const { data, error } = await sb.from("students").insert({ class_id:classId, name, table_id:tableId }).select().single(); if (error) throw error; return data;
+    },
+    async students(classId) {
+      if (solo) return soloRead().students;
+      const { data, error } = await sb.from("students").select("*").eq("class_id",classId); if (error) throw error; return data;
+    },
+
+    async send({classId,studentId,tableId,topicId,anchorId,text,visibility}) {
+      if (solo) {
+        const d=soloRead();
+        const t={ id:uid("th"), class_id:classId, student_id:studentId, table_id:tableId, topic_id:topicId,
+          anchor_id:anchorId, text, visibility, status: visibility==="now"?"ready":"captured",
+          created_at:new Date().toISOString(), replies:[], reactions:[] };
+        d.thoughts.unshift(t);
+        if (visibility==="later") d.queue.push({ thought_id:t.id, class_id:classId, status:"pending", scheduled_for:null, response:null });
+        soloWrite(d); return t;
+      }
+      const { data, error } = await sb.from("thoughts").insert({ class_id:classId, student_id:studentId, table_id:tableId,
+        topic_id:topicId, anchor_id:anchorId, text, visibility, status: visibility==="now"?"ready":"captured" }).select().single();
+      if (error) throw error;
+      if (visibility==="later") await sb.from("queue").insert({ thought_id:data.id, class_id:classId, status:"pending" });
+      return data;
+    },
+
+    async move(t, visibility, classId) {
+      if (solo) {
+        const d=soloRead();
+        d.thoughts = d.thoughts.map(x=>x.id===t.id?{...x,visibility,status:visibility==="now"?"ready":"captured"}:x);
+        d.queue = d.queue.filter(q=>q.thought_id!==t.id);
+        if (visibility==="later") d.queue.push({ thought_id:t.id, class_id:classId, status:"pending", scheduled_for:null, response:null });
+        soloWrite(d); return;
+      }
+      if (visibility==="later") await sb.from("queue").upsert({ thought_id:t.id, class_id:classId, status:"pending" });
+      else await sb.from("queue").delete().eq("thought_id",t.id);
+      const { error } = await sb.from("thoughts").update({ visibility, status: visibility==="now"?"ready":"captured" }).eq("id",t.id);
+      if (error) throw error;
+    },
+
+    async status(id, status) {
+      if (solo) { const d=soloRead(); d.thoughts=d.thoughts.map(t=>t.id===id?{...t,status}:t); soloWrite(d); return; }
+      const { error } = await sb.from("thoughts").update({status}).eq("id",id); if (error) throw error;
+    },
+    async remove(id) {
+      if (solo) { const d=soloRead(); d.thoughts=d.thoughts.filter(t=>t.id!==id); d.queue=d.queue.filter(q=>q.thought_id!==id); soloWrite(d); return; }
+      const { error } = await sb.from("thoughts").delete().eq("id",id); if (error) throw error;
+    },
+
+    // Only 'now' and 'later' ever come back here.
+    async classThoughts(classId) {
+      if (solo) { const d=soloRead();
+        return d.thoughts.filter(t=>t.visibility==="now"||t.visibility==="later")
+          .map(t=>({...t, students:{ name:(d.students.find(s=>s.id===t.student_id)||{}).name }})); }
+      // Do not use PostgREST's implicit students embed here. Some versions/databases
+      // can have more than one relationship between thoughts and students, which
+      // makes `students(name)` ambiguous and blocks the entire teacher screen.
+      // Fetch the two tables separately and join them in the browser.
+      const [{ data: thoughts, error: thoughtsError }, { data: students, error: studentsError }] = await Promise.all([
+        sb.from("thoughts").select("*").eq("class_id",classId).order("created_at",{ascending:false}),
+        sb.from("students").select("id,name").eq("class_id",classId)
+      ]);
+      if (thoughtsError) throw thoughtsError;
+      if (studentsError) throw studentsError;
+      const byId = new Map((students||[]).map(s=>[s.id,s]));
+      return (thoughts||[]).map(t=>({...t, students:{name:(byId.get(t.student_id)||{}).name||"Someone"}}));
+    },
+    async queue(classId) {
+      if (solo) return soloRead().queue;
+      const { data, error } = await sb.from("queue").select("*").eq("class_id",classId); if (error) throw error; return data;
+    },
+    async setQueue(thoughtId, patch) {
+      if (solo) { const d=soloRead(); d.queue=d.queue.map(q=>q.thought_id===thoughtId?{...q,...patch}:q); soloWrite(d); return; }
+      const { error } = await sb.from("queue").update(patch).eq("thought_id",thoughtId); if (error) throw error;
+    },
+
+    async tableFeed(tableId) {
+      if (solo) { const d=soloRead();
+        return d.thoughts.filter(t=>t.visibility==="table" && t.table_id===tableId)
+          .map(t=>({ ...t, student_name:(d.students.find(s=>s.id===t.student_id)||{}).name||"Someone",
+            replies:t.replies||[], reaction_count:(t.reactions||[]).length, reacted_by:t.reactions||[] })); }
+      const [f,r] = await Promise.all([ sb.rpc("table_feed",{p_table_id:tableId}), sb.rpc("table_replies",{p_table_id:tableId}) ]);
+      if (f.error) throw f.error; if (r.error) throw r.error;
+      const by={}; (r.data||[]).forEach(x=>{ (by[x.thought_id]=by[x.thought_id]||[]).push(x); });
+      return (f.data||[]).map(t=>({ ...t, replies: by[t.id]||[] }));
+    },
+    async reply(thoughtId, studentId, text) {
+      if (solo) { const d=soloRead();
+        d.thoughts=d.thoughts.map(t=>t.id===thoughtId?{...t,replies:[...(t.replies||[]),{id:uid("r"),student_name:(d.students.find(s=>s.id===studentId)||{}).name||"Someone",text,created_at:new Date().toISOString()}]}:t);
+        soloWrite(d); return; }
+      const { error } = await sb.from("replies").insert({ thought_id:thoughtId, student_id:studentId, text }); if (error) throw error;
+    },
+    async react(thoughtId, studentId, on) {
+      if (solo) { const d=soloRead();
+        d.thoughts=d.thoughts.map(t=>{ if(t.id!==thoughtId) return t;
+          const rs=t.reactions||[]; return {...t, reactions: on ? rs.filter(x=>x!==studentId) : [...rs, studentId]}; });
+        soloWrite(d); return; }
+      if (on) { const {error}=await sb.from("reactions").delete().eq("thought_id",thoughtId).eq("student_id",studentId); if(error) throw error; }
+      else { const {error}=await sb.from("reactions").insert({ thought_id:thoughtId, student_id:studentId }); if(error) throw error; }
+    },
+
+    subscribe(classId, onChange) {
+      if (solo) { const h=()=>onChange(); window.addEventListener("solo-change",h); window.addEventListener("storage",h);
+        return ()=>{ window.removeEventListener("solo-change",h); window.removeEventListener("storage",h); }; }
+      const ch = sb.channel("class:"+classId)
+        .on("postgres_changes",{event:"*",schema:"public",table:"thoughts",filter:`class_id=eq.${classId}`},onChange)
+        .on("postgres_changes",{event:"*",schema:"public",table:"queue",filter:`class_id=eq.${classId}`},onChange)
+        .on("postgres_changes",{event:"*",schema:"public",table:"classes",filter:`id=eq.${classId}`},onChange)
+        .on("postgres_changes",{event:"*",schema:"public",table:"topics",filter:`class_id=eq.${classId}`},onChange)
+        .on("postgres_changes",{event:"*",schema:"public",table:"students",filter:`class_id=eq.${classId}`},onChange)
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
+  };
+  return api;
+}
+
+/* ================================================================= composer */
+
+const SCAFFOLDS = ["Can you explain","Why does","How does this relate to","I noticed that","I'm wondering whether","I see this differently because"];
+
+// Wording help that needs no key. Tidies the sentence and offers two ways in.
+// It only ever moves words around — it never adds an idea.
+const HEDGES = [
+  /^(i\s+)?(don'?t|do not)\s+(really\s+)?(get|understand)\s+/i,
+  /^(i'?m|i am)\s+(a bit\s+|really\s+)?(confused|unclear|unsure)\s+(about|by|on)\s+/i,
+  /^(i\s+)?(just\s+)?wanted to (ask|know)\s+(about\s+)?/i,
+  /^(sorry,?|umm?,?|so,?|like,?)\s+/i,
+  /^(my question is|the question is)\s+/i,
+  /^(basically|maybe|kind of|sort of)\s+/i,
+];
+
+function tidy(s) {
+  let out = s.replace(/\s+/g, " ").trim();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const h of HEDGES) {
+      const next = out.replace(h, "");
+      if (next !== out) { out = next.trim(); changed = true; }
+    }
+  }
+  return out;
+}
+
+function localReframe(raw) {
+  const core = tidy(raw).replace(/[.?!]+$/, "");
+  if (!core) return [];
+  const lower = core.charAt(0).toLowerCase() + core.slice(1);
+  const asked = /^(what|why|how|when|where|which|who|is|are|does|do|can|could|should|would)\b/i.test(core);
+
+  const options = [];
+  // 1. the tidied version of exactly what they wrote
+  const direct = core.charAt(0).toUpperCase() + core.slice(1) + (asked ? "?" : ".");
+  if (direct.toLowerCase() !== raw.trim().toLowerCase()) options.push(direct);
+
+  // 2. the same thing with a way in at the front
+  options.push(asked ? "Can I ask " + lower + "?" : "Can you explain " + lower + "?");
+
+  // 3. a softer opening, if we still need a second one
+  if (options.length < 2) options.push("I'm wondering whether " + lower + ".");
+
+  return options.slice(0, 2);
+}
+
+function Composer({ state, text, setText, onSend, onCancel }) {
+  const [anchorId,setAnchorId]=useState(null); const [dismissed,setDismissed]=useState(false);
+  const [options,setOptions]=useState(null); const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState(null); const [original,setOriginal]=useState(null);
+
+  const suggestions = useMemo(()=> dismissed?[]:suggestAnchors(state.anchors,state.materials,text,state.klass.current_topic_id),
+    [state.anchors,state.materials,text,dismissed,state.klass.current_topic_id]);
+  const chosen = anchorId ? state.anchors.find(a=>a.id===anchorId) : null;
+  if (!text.trim()) return null;
+
+  async function doReframe(){
+    if (!aiReady()) {
+      const out = localReframe(text);
+      if (!out.length) setErr("Nothing to tidy there. Your wording stands.");
+      else { setOptions(out); setErr(null); }
+      return;
+    }
+    setBusy(true); setErr(null); setOptions(null);
+    try { const out = await reframe(text.trim()); if(!out.length) throw new Error("Nothing came back. Your wording stands."); setOptions(out); }
+    catch(e){ setErr(e.message); } finally { setBusy(false); } }
+
+  function commit(action){ const a = chosen || suggestions[0] || null;
+    onSend({ text:text.trim(), anchorId:a?a.id:null, topicId:a?a.topic_id:state.klass.current_topic_id, action });
+    setAnchorId(null); setDismissed(false); setOptions(null); setOriginal(null); setErr(null); }
+
+  return (
+    <div style={{marginTop:14}}>
+      {chosen ? (
+        <div style={{border:`1px solid ${C.line}`,borderLeft:`3px solid ${C.ink}`,borderRadius:10,padding:"11px 13px",display:"flex",gap:10}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,color:C.muted,marginBottom:3}}>Pinned to the material</div>
+            <div style={{fontSize:15,color:C.ink,fontWeight:500}}>{chosen.label}</div>
+          </div>
+          <Btn tone="ghost" small onClick={()=>setAnchorId(null)}>Change</Btn>
+        </div>
+      ) : suggestions.length ? (
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <div style={{fontSize:13,color:C.muted}}>This looks like it came from</div>
+            <button className="focusable" onClick={()=>setDismissed(true)} style={{marginLeft:"auto",border:"none",background:"transparent",color:C.muted,fontSize:13}}>None of these</button>
+          </div>
+          <div style={{display:"grid",gap:7}}>
+            {suggestions.map(a=>(
+              <button key={a.id} className="focusable" onClick={()=>setAnchorId(a.id)}
+                style={{textAlign:"left",border:`1px solid ${C.line}`,background:"transparent",borderRadius:10,padding:"10px 13px"}}>
+                <div style={{fontSize:12,color:C.muted,marginBottom:2}}>{a.materialTitle}</div>
+                <div style={{fontSize:15,color:C.ink}}>{a.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : <div style={{fontSize:13,color:C.muted}}>Nothing on file matches this yet. It'll go without an anchor, which is fine.</div>}
+
+      <div style={{marginTop:16,borderTop:`1px solid ${C.lineSoft}`,paddingTop:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <Btn small onClick={doReframe} disabled={busy}>
+            {busy ? <span style={{display:"inline-flex",alignItems:"center",gap:8}}><Spin/> Rewording</span> : "Help me word it better"}
+          </Btn>
+          {original && <button className="focusable" onClick={()=>{setText(original);setOriginal(null);}} style={{border:"none",background:"transparent",color:C.muted,fontSize:13}}>Put my own words back</button>}
+        </div>
+        <div style={{fontSize:12,color:C.muted,marginTop:7,lineHeight:1.4}}>
+          Wording only. It won't change what you're asking.{!aiReady() && " Runs on this device, no account needed."}
+        </div>
+        <div style={{marginTop:11}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:7}}>Or start it with</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {SCAFFOLDS.map(sc=>(
+              <button key={sc} className="focusable"
+                onClick={()=>{ setOriginal(text); setText(sc+" "+tidy(text).charAt(0).toLowerCase()+tidy(text).slice(1)); }}
+                style={{border:`1px solid ${C.line}`,background:"transparent",color:C.body,borderRadius:9,padding:"6px 11px",fontSize:13}}>{sc}…</button>
+            ))}
+          </div>
+        </div>
+        {err && <div style={{fontSize:13,color:C.now,marginTop:10,lineHeight:1.45}}>{err}</div>}
+        {options && (
+          <div style={{display:"grid",gap:7,marginTop:12}}>
+            {options.map((o,i)=>(
+              <button key={i} className="focusable" onClick={()=>{setOriginal(text);setText(o);setOptions(null);}}
+                style={{textAlign:"left",border:`1px solid ${C.line}`,background:C.paper,borderRadius:10,padding:"12px 14px"}}>
+                <div className="thought" style={{fontSize:17,lineHeight:1.45,color:C.ink}}>{o}</div>
+              </button>
+            ))}
+            <button className="focusable" onClick={()=>setOptions(null)} style={{border:"none",background:"transparent",color:C.muted,fontSize:13,textAlign:"left"}}>Keep mine as it is</button>
+          </div>
+        )}
+      </div>
+
+      <div style={{display:"grid",gap:8,marginTop:18}}>
+        {Object.values(ACTIONS).map(a=>(
+          <button key={a.key} className="focusable" onClick={()=>commit(a.key)}
+            style={{textAlign:"left",border:`1px solid ${C.line}`,borderLeft:`4px solid ${a.color}`,background:C.surface,borderRadius:11,padding:"13px 15px"}}>
+            <div style={{fontSize:17,fontWeight:600,color:a.color,marginBottom:2}}>{a.label}</div>
+            <div style={{fontSize:14,color:C.muted,lineHeight:1.35}}>{a.blurb}</div>
+          </button>
+        ))}
+      </div>
+      {onCancel && <div style={{marginTop:12}}><Btn tone="ghost" small onClick={onCancel}>Not now</Btn></div>}
+    </div>
+  );
+}
+
+/* ================================================================= student */
+
+function Row({ t, anchors, author, children }) {
+  const a = ACTIONS[t.visibility] || ACTIONS.private;
+  const anchor = anchors.find(x=>x.id===t.anchor_id);
+  return (
+    <Card style={{padding:17}}>
+      <div style={{display:"flex",gap:9,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
+        <Tag color={a.color} filled>{a.label}</Tag>
+        {anchor && <Tag>{anchor.label}</Tag>}
+        <span style={{fontSize:13,color:C.muted,marginLeft:"auto"}}>{author?author+" · ":""}{relTime(t.created_at)}</span>
+      </div>
+      <div className="thought" style={{fontSize:20,lineHeight:1.45,color:C.ink}}>{t.text}</div>
+      {children}
+    </Card>
+  );
+}
+
+function StudentApp({ store, onSwitch }) {
+  const [session,setSession]=useState(()=>LS.get("sayit:session",null));
+  const [state,setState]=useState(null);
+  const [tab,setTab]=useState("class"); const [pane,setPane]=useState("notes");
+  const [text,setText]=useState(""); const [privates,setPrivates]=useState([]);
+  const [feed,setFeed]=useState([]); const [toast,setToast]=useState(null);
+  const [notes,setNotes]=useState(""); const [sel,setSel]=useState(null);
+  const askRef=useRef(null); const notesRef=useRef(null);
+
+  useEffect(()=>{ if(!toast) return; const id=setTimeout(()=>setToast(null),3600); return ()=>clearTimeout(id); },[toast]);
+
+  async function refresh(code){
+    const k = await store.getClass(code); if(!k) return;
+    const shape = await store.shape(k.id);
+    const [thoughts,queue] = await Promise.all([store.classThoughts(k.id), store.queue(k.id)]);
+    setState({ klass:k, ...shape, thoughts, queue });
+  }
+
+  useEffect(()=>{ if(!session) return; let stop=()=>{};
+    refresh(session.code).then(()=>{ store.getClass(session.code).then(k=>{ if(k) stop = store.subscribe(k.id, ()=>refresh(session.code)); }); });
+    setPrivates(LS.get("sayit:private:"+session.code,[]));
+    setNotes(LS.get("sayit:notes:"+session.code,""));
+    return ()=>stop();
+  },[session]);
+
+  useEffect(()=>{ if(!session) return; LS.set("sayit:notes:"+session.code, notes); },[notes,session]);
+
+  useEffect(()=>{ if(!session||!session.student.table_id) return; let alive=true;
+    const pull=()=>store.tableFeed(session.student.table_id).then(f=>{ if(alive) setFeed(f); }).catch(()=>{});
+    pull(); const id=setInterval(pull,3000); return ()=>{alive=false;clearInterval(id);};
+  },[session, state && state.thoughts.length]);
+
+  if (!session) return <Join store={store} onJoined={(s)=>{ LS.set("sayit:session",s); setSession(s); }} onSwitch={onSwitch} />;
+  if (!state) return <div style={{padding:60,textAlign:"center",color:C.muted}}><Spin/> Loading the class</div>;
+
+  const me = session.student;
+  const topic = state.topics.find(t=>t.id===state.klass.current_topic_id);
+  const serverMine = state.thoughts.filter(t=>t.student_id===me.id);
+  const mine = [...serverMine,...privates].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const called = serverMine.find(t=>t.status==="taking");
+  const laterMine = serverMine.filter(t=>t.visibility==="later");
+
+  async function send({text:body,anchorId,topicId,action}) {
+    if (action==="private") {
+      const t={ id:"loc_"+uid("p"), text:body, anchor_id:anchorId, topic_id:topicId, student_id:me.id, visibility:"private", created_at:new Date().toISOString() };
+      const all=[t,...privates]; setPrivates(all); LS.set("sayit:private:"+session.code, all);
+      setText(""); setToast("Kept private. It stays on this device and is never sent."); return;
+    }
+    await store.send({ classId:state.klass.id, studentId:me.id, tableId:me.table_id, topicId, anchorId, text:body, visibility:action });
+    await refresh(session.code); setText("");
+    setToast(action==="now" ? "Marked ready. You still say it — the teacher just knows it's coming."
+      : action==="later" ? "Saved for after class." : `Shared with ${session.tableName||"your table"}. The teacher can't see it.`);
+  }
+
+  async function move(t, action) {
+    if (String(t.id).startsWith("loc_")) {
+      if (action==="private") return;
+      await store.send({ classId:state.klass.id, studentId:me.id, tableId:me.table_id, topicId:t.topic_id, anchorId:t.anchor_id, text:t.text, visibility:action });
+      const all=privates.filter(p=>p.id!==t.id); setPrivates(all); LS.set("sayit:private:"+session.code, all);
+      await refresh(session.code); setToast("Sent."); return;
+    }
+    if (action==="private") {
+      const p={ id:"loc_"+uid("p"), text:t.text, anchor_id:t.anchor_id, topic_id:t.topic_id, student_id:me.id, visibility:"private", created_at:new Date().toISOString() };
+      const all=[p,...privates]; setPrivates(all); LS.set("sayit:private:"+session.code, all);
+      await store.remove(t.id); await refresh(session.code);
+      setToast("Pulled back and made private. It's off the server now."); return;
+    }
+    await store.move(t, action, state.klass.id); await refresh(session.code);
+    setToast(action==="now"?"Now going to the class.":action==="later"?"Moved to the after-class queue.":"Moved to your table.");
+  }
+
+  async function del(t) {
+    if (String(t.id).startsWith("loc_")) { const all=privates.filter(p=>p.id!==t.id); setPrivates(all); LS.set("sayit:private:"+session.code, all); }
+    else { await store.remove(t.id); await refresh(session.code); }
+    setToast("Deleted.");
+  }
+
+  function checkSel(){ const el=notesRef.current; if(!el) return;
+    const p=notes.slice(el.selectionStart,el.selectionEnd).trim(); setSel(p.length>3?p:null); }
+
+  return (
+    <div>
+      {called && (
+        <div style={{background:C.now,color:"#fff",borderRadius:14,padding:20,marginBottom:20}}>
+          <div style={{fontSize:13,fontWeight:600,marginBottom:6,opacity:.9}}>The teacher has opened the floor for this</div>
+          <div className="thought" style={{fontSize:22,lineHeight:1.4,marginBottom:14}}>{called.text}</div>
+          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+            <Btn tone={{bg:"#fff",fg:C.now}} onClick={async()=>{ await store.status(called.id,"spoken"); refresh(session.code); setToast("Nice. Marked as said."); }}>I said it</Btn>
+            <span style={{fontSize:14,opacity:.9}}>Your turn. Nobody is going to say it for you.</span>
+          </div>
+        </div>
+      )}
+
+      <Tabs value={tab} onChange={setTab} items={[["class","Class"],["mine",`My questions${mine.length?" · "+mine.length:""}`],["later",`Later${laterMine.length?" · "+laterMine.length:""}`],["table",session.tableName||"Table"]]} />
+
+      {tab==="class" && (
+        <div className="split">
+          <div style={{display:"grid",gap:14}}>
+            <Card style={{padding:20}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:16}}>
+                {state.klass.status==="live" && <span className="livedot" style={{width:8,height:8,borderRadius:99,background:C.live,display:"inline-block"}}/>}
+                <span style={{fontSize:13,fontWeight:600,color:state.klass.status==="live"?C.live:C.muted}}>{state.klass.status==="live"?"In session":"Not started"}</span>
+                <span style={{fontSize:13,color:C.muted,marginLeft:"auto"}}>{state.klass.name}</span>
+              </div>
+              {state.topics.length===0 && <div style={{fontSize:15,color:C.muted,lineHeight:1.5}}>Your teacher hasn't uploaded anything yet. Your notes still work.</div>}
+              <div style={{display:"grid",gap:6}}>
+                {state.topics.map(tp=>{ const on=tp.id===state.klass.current_topic_id; return (
+                  <div key={tp.id} style={{borderRadius:11,padding:on?16:"11px 16px",background:on?C.ink:"transparent"}}>
+                    {on && <div style={{fontSize:11,fontWeight:600,color:"#fff",opacity:.6,marginBottom:6}}>On now</div>}
+                    <div style={{fontSize:on?22:16,fontWeight:on?600:400,color:on?"#fff":C.muted,lineHeight:1.25}}>{tp.title}</div>
+                    {on && (tp.subtopics||[]).length>0 && (
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:11}}>
+                        {tp.subtopics.map(s=><span key={s} style={{fontSize:12,color:"#fff",opacity:.82,border:"1px solid rgba(255,255,255,.28)",borderRadius:999,padding:"3px 9px"}}>{s}</span>)}
+                      </div>)}
+                  </div> ); })}
+              </div>
+            </Card>
+
+            <Card style={{padding:20}}>
+              <div style={{fontSize:16,fontWeight:600,color:C.ink,marginBottom:3}}>What I've asked</div>
+              <div style={{fontSize:13,color:C.muted,marginBottom:12}}>Ticks itself once it's been said or answered.</div>
+              {serverMine.length===0 && <div style={{fontSize:14,color:C.muted}}>Nothing yet today.</div>}
+              {serverMine.map(t=>{ const q=state.queue.find(x=>x.thought_id===t.id);
+                const on = t.status==="spoken"||t.status==="addressed"||(q&&q.status==="answered"); const a=ACTIONS[t.visibility];
+                return (
+                  <div key={t.id} style={{display:"flex",gap:11,alignItems:"flex-start",padding:"10px 0",borderTop:`1px solid ${C.lineSoft}`}}>
+                    <span style={{width:19,height:19,borderRadius:5,flexShrink:0,marginTop:2,border:`1.5px solid ${on?a.color:C.line}`,background:on?a.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      {on && <span style={{color:"#fff",fontSize:12,lineHeight:1}}>✓</span>}</span>
+                    <span style={{flex:1}}>
+                      <span className="thought" style={{display:"block",fontSize:16,lineHeight:1.4,color:on?C.muted:C.ink,textDecoration:on?"line-through":"none"}}>{t.text}</span>
+                      <span style={{display:"block",fontSize:12,color:C.muted,marginTop:4}}>{a.label}{q?" · "+q.status:""}</span>
+                    </span>
+                  </div> ); })}
+            </Card>
+          </div>
+
+          <div>
+            <div style={{display:"inline-flex",border:`1px solid ${C.line}`,borderRadius:10,overflow:"hidden",marginBottom:14}}>
+              {[["notes","My notes"],["ask","Ask something"]].map(([k,lab])=>(
+                <button key={k} className="focusable" onClick={()=>setPane(k)}
+                  style={{border:"none",background:pane===k?C.ink:"transparent",color:pane===k?"#fff":C.body,padding:"9px 16px",fontSize:15,fontWeight:500}}>{lab}</button>))}
+            </div>
+
+            {pane==="ask" ? (
+              <Card style={{padding:22}}>
+                <div style={{fontSize:21,fontWeight:600,color:C.ink,marginBottom:3}}>What's in your head?</div>
+                <div style={{fontSize:15,color:C.muted,marginBottom:14}}>Half a thought is fine. Write it before you lose it.</div>
+                <textarea ref={askRef} className="thought focusable" value={text} onChange={e=>setText(e.target.value)}
+                  placeholder="Why does this work differently here?"
+                  style={{width:"100%",minHeight:140,fontSize:21,lineHeight:1.5,color:C.ink,padding:16,borderRadius:12,border:`1px solid ${C.line}`,background:C.paper,resize:"vertical"}} />
+                <Composer state={state} text={text} setText={setText} onSend={send} />
+              </Card>
+            ) : (
+              <div>
+                <Card style={{padding:0,overflow:"hidden"}}>
+                  <div style={{padding:"16px 22px",borderBottom:`1px solid ${C.lineSoft}`,display:"flex",gap:10,alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:17,fontWeight:600,color:C.ink}}>Notes</div>
+                      <div style={{fontSize:13,color:C.muted}}>{topic?topic.title+" · ":""}stays on this device</div>
+                    </div>
+                    <div style={{marginLeft:"auto",fontSize:13,color:C.muted}}>{notes.trim()?notes.trim().split(/\s+/).length+" words":"Start typing"}</div>
+                  </div>
+                  {sel && (
+                    <div style={{background:C.ink,color:"#fff",padding:"12px 22px",display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+                      <div style={{fontSize:14,opacity:.85,flex:1,minWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>“{sel}”</div>
+                      <Btn small tone={{bg:"#fff",fg:C.ink}} onClick={()=>{ setText(sel); setPane("ask"); setSel(null); setTimeout(()=>askRef.current&&askRef.current.focus(),40); }}>Turn this into a question</Btn>
+                      <button className="focusable" onClick={()=>setSel(null)} style={{border:"none",background:"transparent",color:"#fff",opacity:.7,fontSize:13}}>Dismiss</button>
+                    </div>
+                  )}
+                  <textarea ref={notesRef} className="thought focusable" value={notes}
+                    onChange={e=>setNotes(e.target.value)} onSelect={checkSel} onMouseUp={checkSel} onKeyUp={checkSel}
+                    placeholder={"Write the way you normally would.\n\nWhen something in here is really a question, select it and turn it into one."}
+                    style={{width:"100%",minHeight:380,fontSize:19,lineHeight:1.7,color:C.ink,padding:"22px 24px",border:"none",background:C.surface,resize:"vertical",outline:"none"}} />
+                  <div style={{padding:"12px 22px",borderTop:`1px solid ${C.lineSoft}`,fontSize:13,color:C.muted}}>
+                    Select any part of what you've written to turn it into a question.
+                  </div>
+                </Card>
+                {text.trim() && (
+                  <Card style={{padding:20,marginTop:14}}>
+                    <div style={{fontSize:15,color:C.muted,marginBottom:10}}>Pulled from your notes</div>
+                    <textarea className="thought focusable" value={text} onChange={e=>setText(e.target.value)}
+                      style={{width:"100%",minHeight:92,fontSize:19,lineHeight:1.5,color:C.ink,padding:14,borderRadius:12,border:`1px solid ${C.line}`,background:C.paper,resize:"vertical"}} />
+                    <Composer state={state} text={text} setText={setText} onSend={send} onCancel={()=>setText("")} />
+                  </Card>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab==="mine" && (
+        <div style={{display:"grid",gap:12}}>
+          <div style={{fontSize:15,color:C.muted}}>Everything you've written today. Move any of these, or delete it.</div>
+          {mine.length===0 && <Empty title="Nothing yet today" body="Anything you capture shows up here, wherever you sent it." />}
+          {mine.map(t=>{ const q=state.queue.find(x=>x.thought_id===t.id); const locked=t.status==="taking";
+            return (
+              <Row key={t.id} t={t} anchors={state.anchors}>
+                <div style={{marginTop:14,paddingTop:13,borderTop:`1px solid ${C.lineSoft}`}}>
+                  <div style={{fontSize:13,color:C.muted,marginBottom:9}}>{locked?"The teacher has the floor open for this. Leave it where it is.":"Send it somewhere else"}</div>
+                  <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
+                    {Object.values(ACTIONS).map(a=>{ const on=t.visibility===a.key; return (
+                      <button key={a.key} className="focusable" disabled={locked||on} onClick={()=>move(t,a.key)}
+                        style={{border:`1px solid ${on?a.color:C.line}`,background:on?a.color:"transparent",color:on?"#fff":locked?C.line:C.body,borderRadius:9,padding:"7px 12px",fontSize:14,fontWeight:on?600:400,opacity:locked&&!on?.4:1}}>{a.label}</button> ); })}
+                    <div style={{marginLeft:"auto"}}><Btn small tone="ghost" onClick={()=>del(t)}>Delete</Btn></div>
+                  </div>
+                  {q && <div style={{fontSize:13,color:C.muted,marginTop:11}}>In the teacher's queue: {q.status}{q.scheduled_for?" · "+q.scheduled_for:""}</div>}
+                </div>
+              </Row> ); })}
+        </div>
+      )}
+
+      {tab==="later" && (
+        <div style={{display:"grid",gap:12}}>
+          {laterMine.length===0 && <Empty title="Nothing saved for later" body="Anything you park here goes to the teacher's after-class queue." />}
+          {laterMine.map(t=>{ const q=state.queue.find(x=>x.thought_id===t.id)||{status:"pending"};
+            const tone = q.status==="answered"?C.table:q.status==="scheduled"?C.later:C.muted;
+            return (
+              <Row key={t.id} t={t} anchors={state.anchors}>
+                <div style={{marginTop:14,paddingTop:13,borderTop:`1px solid ${C.lineSoft}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:q.response?10:0}}>
+                    <Tag color={tone} filled>{q.status}</Tag>
+                    <span style={{fontSize:14,color:C.muted}}>{q.status==="pending"?"Waiting with the teacher":q.status==="scheduled"?"Being answered "+q.scheduled_for:"Answered"}</span>
+                  </div>
+                  {q.response && <div style={{fontSize:16,color:C.body,lineHeight:1.5,background:C.paper,padding:13,borderRadius:10}}>{q.response}</div>}
+                </div>
+              </Row> ); })}
+        </div>
+      )}
+
+      {tab==="table" && (
+        <div style={{display:"grid",gap:12}}>
+          <div style={{fontSize:15,color:C.muted,lineHeight:1.5}}>Only {session.tableName||"your table"} sees these. The teacher's screen cannot load them.</div>
+          {feed.length===0 && <Empty title="Your table hasn't shared anything yet" body="Share here if you'd rather test a thought on a few people first." />}
+          {feed.map(t=><TableThought key={t.id} t={t} anchors={state.anchors} me={me} store={store}
+            onDone={async()=>setFeed(await store.tableFeed(me.table_id))} onMove={move} />)}
+        </div>
+      )}
+
+      <Toast message={toast} />
+    </div>
+  );
+}
+
+function TableThought({ t, anchors, me, store, onDone, onMove }) {
+  const [reply,setReply]=useState(""); const [open,setOpen]=useState(false);
+  const reacted = (t.reacted_by||[]).includes(me.id);
+  return (
+    <Row t={{...t,visibility:"table"}} anchors={anchors} author={t.student_name}>
+      <div style={{marginTop:14,paddingTop:13,borderTop:`1px solid ${C.lineSoft}`}}>
+        <div style={{display:"flex",gap:9,alignItems:"center",flexWrap:"wrap"}}>
+          <button className="focusable" onClick={async()=>{ await store.react(t.id,me.id,reacted); onDone(); }}
+            style={{border:`1px solid ${reacted?C.table:C.line}`,background:reacted?C.table:"transparent",color:reacted?"#fff":C.body,borderRadius:9,padding:"7px 12px",fontSize:14}}>I wondered this too</button>
+          <Btn small tone="ghost" onClick={()=>setOpen(!open)}>{t.replies.length?`${t.replies.length} follow-up${t.replies.length>1?"s":""}`:"Add a follow-up"}</Btn>
+          {t.reaction_count>0 && <span style={{fontSize:14,color:C.muted,marginLeft:"auto"}}>{t.reaction_count} at this table</span>}
+        </div>
+        {(open||t.replies.length>0) && (
+          <div style={{marginTop:13,borderLeft:`2px solid ${C.lineSoft}`,paddingLeft:14}}>
+            {t.replies.map(r=>(
+              <div key={r.id} style={{marginBottom:12}}>
+                <div style={{fontSize:12,color:C.muted,marginBottom:3}}>{r.student_name} · {relTime(r.created_at)}</div>
+                <div className="thought" style={{fontSize:17,lineHeight:1.45,color:C.body}}>{r.text}</div>
+              </div>))}
+            {open && (
+              <div>
+                <textarea className="thought focusable" value={reply} onChange={e=>setReply(e.target.value)}
+                  placeholder="Build on it, or say what you'd add."
+                  style={{width:"100%",minHeight:68,fontSize:17,lineHeight:1.5,padding:12,borderRadius:10,border:`1px solid ${C.line}`,background:C.paper,color:C.ink,resize:"vertical",marginBottom:9}} />
+                <Btn small tone={{bg:C.table,fg:"#fff"}} disabled={!reply.trim()}
+                  onClick={async()=>{ await store.reply(t.id,me.id,reply.trim()); setReply(""); onDone(); }}>Add it</Btn>
+              </div>)}
+          </div>)}
+        {t.student_id===me.id && (
+          <div style={{marginTop:14,paddingTop:13,borderTop:`1px solid ${C.lineSoft}`}}>
+            <div style={{fontSize:13,color:C.muted,marginBottom:9}}>Only your table has seen this.</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <Btn small tone={{bg:C.now,fg:"#fff"}} onClick={()=>onMove(t,"now")}>Send it to the class</Btn>
+              <Btn small tone={{bg:C.later,fg:"#fff"}} onClick={()=>onMove(t,"later")}>Send it to the teacher</Btn>
+            </div>
+          </div>)}
+      </div>
+    </Row>
+  );
+}
+
+function Join({ store, onJoined, onSwitch }) {
+  const [code,setCode]=useState(new URLSearchParams(location.search).get("c")||"");
+  const [klass,setKlass]=useState(null); const [tables,setTables]=useState([]);
+  const [name,setName]=useState(""); const [tableId,setTableId]=useState("");
+  const [newTable,setNewTable]=useState(""); const [busy,setBusy]=useState(false); const [err,setErr]=useState(null);
+
+  async function find(c){ setBusy(true); setErr(null);
+    try { const k=await store.getClass(c.trim()); if(!k) throw new Error("No class with that code. Check the letters with your teacher.");
+      const sh=await store.shape(k.id); setKlass(k); setTables(sh.tables); setTableId(sh.tables[0]?sh.tables[0].id:""); }
+    catch(e){ setErr(e.message); } finally { setBusy(false); } }
+
+  async function go(){ if(!name.trim()) return; setBusy(true); setErr(null);
+    try { let tid=tableId; let tname = (tables.find(t=>t.id===tid)||{}).name||"";
+      if (newTable.trim()) { const t=await store.addTable(klass.id,newTable.trim()); tid=t.id; tname=t.name; }
+      const student = await store.join(klass.id,{ name:name.trim(), tableId:tid||null });
+      onJoined({ code:klass.code, student, tableName:tname });
+    } catch(e){ setErr(e.message); } finally { setBusy(false); } }
+
+  return (
+    <div style={{maxWidth:460,margin:"0 auto",padding:"40px 0"}}>
+      <h1 style={{margin:"0 0 24px",fontSize:34,fontWeight:600,letterSpacing:-.6}}>{klass?klass.name:"Join your class"}</h1>
+      {!klass ? (
+        <Card style={{padding:22}}>
+          <Field label="Class code" hint="Six characters, from your teacher.">
+            <input className="focusable" value={code} maxLength={6} onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))}
+              placeholder="ABC123" style={{...inputStyle,fontSize:30,letterSpacing:7,textAlign:"center",fontWeight:600,padding:"16px 14px"}} />
+          </Field>
+          {err && <div style={{fontSize:14,color:C.now,marginTop:12}}>{err}</div>}
+          <div style={{marginTop:18}}><Btn tone="solid" full disabled={code.length!==6||busy} onClick={()=>find(code)}>
+            {busy?<span style={{display:"inline-flex",alignItems:"center",gap:9}}><Spin color="#fff"/> Looking</span>:"Find the class"}</Btn></div>
+          <div style={{marginTop:16,textAlign:"center"}}>
+            <button className="focusable" onClick={onSwitch} style={{border:"none",background:"transparent",color:C.muted,fontSize:13}}>I'm the teacher</button>
+          </div>
+        </Card>
+      ) : (
+        <Card style={{padding:22}}>
+          <div style={{display:"grid",gap:18}}>
+            <Field label="Your name" hint="Shown to your teacher only on questions you choose to send.">
+              <input className="focusable" value={name} onChange={e=>setName(e.target.value)} placeholder="Aanya" style={inputStyle} autoFocus /></Field>
+            <Field label="Which table are you at?">
+              <select className="focusable" value={tableId} onChange={e=>{setTableId(e.target.value);setNewTable("");}} style={inputStyle}>
+                {tables.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+                <option value="">Somewhere else</option>
+              </select></Field>
+            <Field label="Or name your own table" hint="Only if yours isn't listed.">
+              <input className="focusable" value={newTable} onChange={e=>setNewTable(e.target.value)} placeholder="Back left, by the window" style={inputStyle} /></Field>
+          </div>
+          {err && <div style={{fontSize:14,color:C.now,marginTop:14}}>{err}</div>}
+          <div style={{marginTop:20}}><Btn tone="solid" full disabled={!name.trim()||busy} onClick={go}>
+            {busy?<span style={{display:"inline-flex",alignItems:"center",gap:9}}><Spin color="#fff"/> Joining</span>:"Join"}</Btn></div>
+          <div style={{fontSize:13,color:C.muted,marginTop:16,lineHeight:1.5}}>Your notes and anything you keep private stay on this device and are never sent.</div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================= teacher */
+
+function TeacherApp({ store, onSwitch }) {
+  const [klass,setKlass]=useState(()=>LS.get("sayit:teacherClass",null));
+  const [state,setState]=useState(null);
+  const [tab,setTab]=useState("live"); const [mode,setMode]=useState("deck");
+  const [name,setName]=useState(""); const [code,setCode]=useState("");
+  const [draft,setDraft]=useState({}); const [toast,setToast]=useState(null); const [err,setErr]=useState(null);
+
+  useEffect(()=>{ if(!toast) return; const id=setTimeout(()=>setToast(null),3400); return ()=>clearTimeout(id); },[toast]);
+
+  async function reload(){
+    if(!klass) return;
+    try {
+      const k=await store.getClass(klass.code);
+      // The class may have been deleted during testing. Never leave the teacher
+      // trapped on an infinite Loading screen in that case.
+      if(!k){
+        LS.del("sayit:teacherClass");
+        setKlass(null);
+        setState(null);
+        setErr("That saved class no longer exists. You can start a new class or open another one.");
+        return;
+      }
+      const sh=await store.shape(k.id);
+      const [thoughts,queue,students]=await Promise.all([store.classThoughts(k.id),store.queue(k.id),store.students(k.id)]);
+      setState({ klass:k, ...sh, thoughts, queue, students });
+      setErr(null);
+    } catch(e) {
+      console.error("Say it teacher reload failed", e);
+      setErr(e?.message || "Say it couldn't load the class. Check your connection and Supabase settings.");
+    }
+  }
+
+  useEffect(()=>{ if(!klass) return; let stop=()=>{};
+    reload().then(()=>{
+      store.getClass(klass.code).then(k=>{ if(k) stop=store.subscribe(k.id,reload); })
+        .catch(e=>console.error("Say it subscription setup failed", e));
+    });
+    return ()=>stop();
+  },[klass]);
+
+  if (!klass) return (
+    <div style={{maxWidth:460,margin:"0 auto",padding:"40px 0"}}>
+      <h1 style={{margin:"0 0 24px",fontSize:34,fontWeight:600,letterSpacing:-.6}}>Start a class</h1>
+      <Card style={{padding:22,marginBottom:16}}>
+        <Field label="What's the class called?" hint="Students see this when they join.">
+          <input className="focusable" value={name} onChange={e=>setName(e.target.value)} placeholder="Designing for Influence" style={inputStyle} autoFocus /></Field>
+        <div style={{marginTop:18}}><Btn tone="solid" full onClick={async()=>{
+          setErr(null);
+          try {
+            const k=await store.createClass(name.trim()||"Class");
+            LS.set("sayit:teacherClass",k);
+            setKlass(k);
+          } catch(e) {
+            console.error("Say it create class failed", e);
+            setErr(e?.message || "Couldn't create the class. Check the Supabase connection in Settings.");
+          }
+        }}>Create it</Btn></div>
+      </Card>
+      <Card style={{padding:22}}>
+        <Field label="Or open a class you already made">
+          <input className="focusable" value={code} maxLength={6} onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))} placeholder="ABC123" style={{...inputStyle,letterSpacing:4,textAlign:"center"}} /></Field>
+        <div style={{marginTop:14}}><Btn full disabled={code.length!==6} onClick={async()=>{
+          setErr(null);
+          try {
+            const k=await store.getClass(code);
+            if(k){ LS.set("sayit:teacherClass",k); setKlass(k); }
+            else setErr("No class with that code.");
+          } catch(e) {
+            console.error("Say it open class failed", e);
+            setErr(e?.message || "Couldn't open the class. Check the Supabase connection in Settings.");
+          }
+        }}>Open it</Btn></div>
+      </Card>
+      {err && <div style={{fontSize:14,color:C.now,marginTop:14}}>{err}</div>}
+      <div style={{marginTop:16,textAlign:"center"}}>
+        <button className="focusable" onClick={onSwitch} style={{border:"none",background:"transparent",color:C.muted,fontSize:13}}>I'm a student</button>
+      </div>
+    </div>
+  );
+
+  if (!state) return (
+    <div style={{maxWidth:620,margin:"0 auto",padding:"55px 0"}}>
+      <Card style={{padding:28,textAlign:"center"}}>
+        <div style={{display:"flex",justifyContent:"center",marginBottom:14}}><Spin size={22}/></div>
+        <div style={{fontSize:22,fontWeight:600,color:C.ink,marginBottom:8}}>Loading your class…</div>
+        <div style={{fontSize:15,color:C.muted,lineHeight:1.5,marginBottom:18}}>
+          If this stays here, Say it isn't able to reach the saved class. You can safely reset this device and start or open a class again.
+        </div>
+        {err && <div style={{fontSize:14,color:C.now,lineHeight:1.5,marginBottom:18,padding:12,borderRadius:10,background:C.paper}}>{err}</div>}
+        <button className="focusable" onClick={resetDevice} style={{border:`1px solid ${C.line}`,background:C.surface,color:C.ink,borderRadius:10,padding:"11px 16px",fontSize:14,fontWeight:600}}>Reset this device</button>
+      </Card>
+    </div>
+  );
+
+  const topic = state.topics.find(t=>t.id===state.klass.current_topic_id);
+  const live = state.thoughts.filter(t=>t.visibility==="now");
+  const later = state.thoughts.filter(t=>t.visibility==="later");
+  const groups = groupSimilar(state.thoughts);
+  const anchorOf = (id)=>state.anchors.find(a=>a.id===id);
+  const link = location.origin+location.pathname+"?c="+state.klass.code;
+
+  return (
+    <div>
+      <Card style={{padding:22,marginBottom:20}}>
+        <div style={{display:"flex",gap:26,flexWrap:"wrap",alignItems:"flex-start"}}>
+          <div style={{flex:1,minWidth:230}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
+              {state.klass.status==="live" && <span className="livedot" style={{width:8,height:8,borderRadius:99,background:C.live,display:"inline-block"}}/>}
+              <span style={{fontSize:13,fontWeight:600,color:state.klass.status==="live"?C.live:C.muted}}>{state.klass.status==="live"?"In session":"Not started"}</span>
+            </div>
+            <h1 style={{margin:"0 0 3px",fontSize:27,fontWeight:600,letterSpacing:-.3}}>{state.klass.name}</h1>
+            <div style={{fontSize:16,color:C.muted}}>{topic?topic.title:"No running order yet"}</div>
+            <div style={{marginTop:16,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              <Btn small tone={state.klass.status==="live"?"quiet":"solid"}
+                onClick={async()=>{ await store.updateClass(state.klass.id,{status:state.klass.status==="live"?"ended":"live"}); reload(); }}>
+                {state.klass.status==="live"?"End the session":"Start the session"}</Btn>
+              <span style={{fontSize:14,color:C.muted}}>{state.students.length} joined</span>
+            </div>
+          </div>
+          <div style={{minWidth:230}}>
+            <div style={{fontSize:13,color:C.muted,marginBottom:6}}>Students join with this code</div>
+            <div style={{fontSize:44,fontWeight:600,letterSpacing:8,lineHeight:1,marginBottom:10}}>{state.klass.code}</div>
+            <button className="focusable" onClick={()=>{navigator.clipboard.writeText(link);setToast("Student link copied.");}}
+              style={{border:`1px solid ${C.line}`,background:"transparent",color:C.body,borderRadius:9,padding:"8px 12px",fontSize:13}}>Copy the student link</button>
+          </div>
+        </div>
+      </Card>
+
+      <Tabs value={tab} onChange={setTab} items={[["live",`Live${live.length?" · "+live.length:""}`],["common",`Common doubts${groups.length?" · "+groups.length:""}`],["later",`Later${later.length?" · "+later.length:""}`],["class","Class setup"]]} />
+
+      {tab==="live" && (
+        <div style={{display:"grid",gap:12}}>
+          <div style={{fontSize:14,color:C.muted}}>Only what students chose to send. Table talk and private notes never reach this screen.</div>
+          {live.length===0 && <Empty title="Nothing ready yet" body="Questions appear the moment a student marks one to say now." />}
+          {live.map(t=>{ const anchor=anchorOf(t.anchor_id); const who=(t.students&&t.students.name)||"Someone"; return (
+            <Card key={t.id} style={{padding:18,borderColor:t.status==="taking"?C.now:C.lineSoft,borderWidth:t.status==="taking"?2:1}}>
+              <div style={{display:"flex",gap:9,alignItems:"center",marginBottom:11,flexWrap:"wrap"}}>
+                <Tag color={C.now} filled>Say now</Tag>
+                <Tag>{anchor?anchor.label:"No anchor"}</Tag>
+                <span style={{fontSize:13,color:C.muted,marginLeft:"auto"}}>{who} · {relTime(t.created_at)}</span>
+              </div>
+              <div className="thought" style={{fontSize:20,lineHeight:1.45,marginBottom:14}}>{t.text}</div>
+              {t.status==="taking" ? (
+                <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                  <span style={{fontSize:15,color:C.now,fontWeight:600}}>Floor is open. {who} is speaking.</span>
+                  <div style={{marginLeft:"auto"}}><Btn small onClick={async()=>{await store.status(t.id,"addressed");reload();}}>Mark addressed</Btn></div>
+                </div>
+              ) : (t.status==="spoken"||t.status==="addressed") ? <div style={{fontSize:15,color:C.table,fontWeight:500}}>Done</div> : (
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <Btn small tone={{bg:C.now,fg:"#fff"}} onClick={async()=>{await store.status(t.id,"taking");reload();}}>Take now</Btn>
+                  <Btn small onClick={async()=>{await store.move(t,"later",state.klass.id);reload();}}>Save for later</Btn>
+                  <Btn small tone="ghost" onClick={async()=>{await store.status(t.id,"addressed");reload();}}>Mark addressed</Btn>
+                </div>)}
+            </Card> ); })}
+        </div>
+      )}
+
+      {tab==="common" && (
+        <div style={{display:"grid",gap:14}}>
+          {groups.length===0 && <Empty title="Nothing repeating yet" body="When several students circle the same thing, it shows up here." />}
+          {groups.map((g,i)=>{ const anchor=anchorOf(g[0].anchor_id); return (
+            <Card key={i} style={{padding:20}}>
+              <div style={{fontSize:20,fontWeight:600,marginBottom:4}}>{g.length} students are circling the same thing</div>
+              <div style={{fontSize:15,color:C.muted,marginBottom:16}}>{anchor?anchor.label+" — worth a second pass before you move on.":"Worth a second pass before you move on."}</div>
+              <div style={{display:"grid",gap:9}}>
+                {g.map(t=><div key={t.id} className="thought" style={{fontSize:18,lineHeight:1.45,color:C.body,background:C.paper,padding:"12px 14px",borderRadius:10}}>{t.text}</div>)}
+              </div>
+            </Card> ); })}
+        </div>
+      )}
+
+      {tab==="later" && (
+        <div style={{display:"grid",gap:12}}>
+          {later.length===0 && <Empty title="The later queue is empty" body="Questions parked by students land here." />}
+          {later.map(t=>{ const q=state.queue.find(x=>x.thought_id===t.id)||{status:"pending"};
+            const anchor=anchorOf(t.anchor_id); const who=(t.students&&t.students.name)||"Someone"; return (
+            <Card key={t.id} style={{padding:18}}>
+              <div style={{display:"flex",gap:9,alignItems:"center",marginBottom:11,flexWrap:"wrap"}}>
+                <Tag color={q.status==="answered"?C.table:q.status==="scheduled"?C.later:C.muted} filled>{q.status}</Tag>
+                {anchor && <Tag>{anchor.label}</Tag>}
+                <span style={{fontSize:13,color:C.muted,marginLeft:"auto"}}>{who} · {relTime(t.created_at)}</span>
+              </div>
+              <div className="thought" style={{fontSize:20,lineHeight:1.45,marginBottom:14}}>{t.text}</div>
+              {q.status==="pending" && (
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <Btn small tone={{bg:C.later,fg:"#fff"}} onClick={async()=>{await store.setQueue(t.id,{status:"scheduled",scheduled_for:"after today's class"});reload();}}>Answer after class</Btn>
+                  <Btn small onClick={async()=>{await store.setQueue(t.id,{status:"scheduled",scheduled_for:"in the next session"});reload();}}>Bring to next session</Btn>
+                </div>)}
+              {q.status==="scheduled" && (
+                <div>
+                  <div style={{fontSize:15,color:C.later,marginBottom:12}}>Scheduled {q.scheduled_for}. {who} can see this.</div>
+                  <textarea className="focusable" value={draft[t.id]||""} onChange={e=>setDraft({...draft,[t.id]:e.target.value})}
+                    placeholder="Write the answer, or leave it and answer out loud."
+                    style={{...inputStyle,minHeight:76,background:C.paper,resize:"vertical",marginBottom:10}} />
+                  <Btn small tone={{bg:C.table,fg:"#fff"}} onClick={async()=>{await store.setQueue(t.id,{status:"answered",response:draft[t.id]||"Answered in the after-class discussion."});reload();}}>Mark answered</Btn>
+                </div>)}
+              {q.status==="answered" && q.response && <div style={{fontSize:16,color:C.body,lineHeight:1.5,background:C.paper,padding:13,borderRadius:10}}>{q.response}</div>}
+            </Card> ); })}
+        </div>
+      )}
+
+      {tab==="class" && (
+        <div className="split-even">
+          <div style={{display:"grid",gap:16}}>
+            <Card style={{padding:20}}>
+              <div style={{fontSize:17,fontWeight:600,marginBottom:3}}>The running order</div>
+              <div style={{fontSize:14,color:C.muted,marginBottom:14}}>
+                {state.topics.length?"Tap one to put it on now.":"Nothing yet. Add the deck you're teaching from and the class builds itself."}</div>
+              <div style={{display:"grid",gap:8}}>
+                {state.topics.map(tp=>{ const on=tp.id===state.klass.current_topic_id;
+                  const count=state.anchors.filter(a=>a.topic_id===tp.id).length; return (
+                  <button key={tp.id} className="focusable" onClick={async()=>{await store.updateClass(state.klass.id,{current_topic_id:tp.id});reload();}}
+                    style={{textAlign:"left",border:`1px solid ${on?C.ink:C.line}`,background:on?C.paper:"transparent",borderRadius:11,padding:"14px 16px"}}>
+                    <div style={{display:"flex",gap:9,alignItems:"baseline"}}>
+                      <span style={{fontSize:12,color:C.muted}}>{tp.ord}</span>
+                      <span style={{flex:1,fontSize:17,fontWeight:on?600:400}}>{tp.title}</span>
+                      <span style={{fontSize:12,color:C.muted}}>{count} anchors</span>
+                    </div>
+                    {on && (tp.subtopics||[]).length>0 && <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:9}}>{tp.subtopics.map(x=><Tag key={x}>{x}</Tag>)}</div>}
+                  </button> ); })}
+              </div>
+            </Card>
+
+            <Card style={{padding:20}}>
+              <div style={{fontSize:17,fontWeight:600,marginBottom:12}}>Tables</div>
+              {state.tables.map(t=>(
+                <div key={t.id} style={{padding:"9px 0",borderTop:`1px solid ${C.lineSoft}`,display:"flex",gap:10,alignItems:"center"}}>
+                  <input className="focusable" defaultValue={t.name}
+                    onBlur={async e=>{ if(e.target.value.trim()&&e.target.value!==t.name){ await store.renameTable(t.id,e.target.value.trim()); reload(); } }}
+                    style={{flex:1,fontSize:16,border:"none",background:"transparent",padding:0,outline:"none"}} />
+                  <span style={{fontSize:13,color:C.muted}}>{state.students.filter(s=>s.table_id===t.id).length} here</span>
+                </div>))}
+              <div style={{marginTop:14}}><Btn small onClick={async()=>{await store.addTable(state.klass.id,"Table "+(state.tables.length+1));reload();}}>Add a table</Btn></div>
+            </Card>
+          </div>
+
+          <DeckPanel state={state} store={store} reload={reload} />
+        </div>
+      )}
+
+      <Toast message={toast} />
+    </div>
+  );
+}
+
+function DeckPanel({ state, store, reload }) {
+  const [file,setFile]=useState(null); const [pasted,setPasted]=useState("");
+  const [result,setResult]=useState(null); const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState(null); const [notice,setNotice]=useState(null);
+  const ref=useRef(null);
+  const TEXTY=["txt","md","csv","vtt","srt","json"];
+  const ext = file ? file.name.split(".").pop().toLowerCase() : null;
+  const hasKey = aiReady();
+
+  function pick(e){ const f=e.target.files&&e.target.files[0]; setResult(null);setErr(null);setNotice(null);
+    if(!f){setFile(null);return;} setFile(f);
+    const x=f.name.split(".").pop().toLowerCase();
+    if (x==="pdf") setNotice(hasKey?"PDF. The running order will be read out of the deck.":"PDF. To read it automatically you need an Anthropic key in Settings. Otherwise type the outline below.");
+    else if (TEXTY.includes(x)) setNotice("Text file. It'll be read out of the file.");
+    else setNotice("PowerPoint and Keynote can't be read directly. Export as PDF, or type the outline below.");
+  }
+
+  async function readIt(){ setBusy(true); setErr(null); setResult(null);
+    try {
+      let out;
+      if (file && ext==="pdf") out = await readDeck({file});
+      else if (file && TEXTY.includes(ext)) out = await readDeck({text:await fileTxt(file)});
+      else if (pasted.trim()) out = await readDeck({text:pasted.trim()});
+      else throw new Error("Add a PDF, or type the outline below.");
+      setResult(out);
+    } catch(e){ const raw=e.message||"";
+      setErr(/JSON|position|Unexpected/i.test(raw)?"The deck was too long to read in one pass. Try splitting it, or type the outline below.":raw);
+    } finally { setBusy(false); } }
+
+  function useOutline(){ const topics=outlineToTopics(pasted);
+    if(!topics.length){ setErr("Type at least one line. Indent a line to make it a subtopic."); return; }
+    setResult({ lecture:"", topics }); setErr(null); }
+
+  async function apply(){ setBusy(true);
+    try { await store.setRunningOrder(state.klass.id,{ lecture:result.lecture, topics:result.topics,
+        deckTitle: file?file.name.replace(/\.[^.]+$/,""):(result.lecture||"Lecture outline") });
+      setFile(null); setPasted(""); setResult(null); setNotice(null); if(ref.current) ref.current.value="";
+      await reload();
+    } catch(e){ setErr(e.message); } finally { setBusy(false); } }
+
+  return (
+    <Card style={{padding:20}}>
+      <div style={{fontSize:17,fontWeight:600,marginBottom:3}}>{state.topics.length?"Replace the running order":"Set up the class"}</div>
+      <div style={{fontSize:14,color:C.muted,marginBottom:16,lineHeight:1.45}}>
+        The running order comes from what you're teaching. Upload the deck as a PDF, or just type the outline — one topic per line, indent for subtopics.
+      </div>
+
+      <input ref={ref} type="file" onChange={pick} className="focusable" accept=".pdf,.txt,.md,.csv,.vtt,.srt,.json,.ppt,.pptx,.key"
+        style={{display:"block",width:"100%",fontSize:15,color:C.body,padding:"12px 14px",border:`1px dashed ${C.line}`,borderRadius:11,background:C.paper,marginBottom:12}} />
+      {file && <div style={{fontSize:14,color:C.body,marginBottom:10}}>{file.name} · {Math.round(file.size/1024)} KB</div>}
+      {notice && <div style={{fontSize:14,color:C.body,lineHeight:1.45,background:C.paper,borderRadius:10,padding:"12px 14px",marginBottom:12}}>{notice}</div>}
+
+      <Field label="Outline — one topic per line, indent for subtopics">
+        <textarea className="focusable" value={pasted} onChange={e=>setPasted(e.target.value)}
+          placeholder={"The CREATE funnel\n  Where a behaviour drops out\n  Reading a failing gate\nB = MAP and the action line\n  Motivation is unreliable\n  Ability as the lever"}
+          style={{...inputStyle,minHeight:130,fontSize:15,lineHeight:1.6,background:C.paper,resize:"vertical"}} />
+      </Field>
+
+      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",margin:"14px 0"}}>
+        <Btn tone="solid" disabled={busy||!pasted.trim()} onClick={useOutline}>Use this outline</Btn>
+        <Btn disabled={busy||(!file&&!pasted.trim())} onClick={readIt}>
+          {busy?<span style={{display:"inline-flex",alignItems:"center",gap:9}}><Spin/> Reading</span>:"Read it with AI instead"}</Btn>
+        {result && <span style={{fontSize:14,color:C.table,fontWeight:500}}>{result.topics.length} topics</span>}
+      </div>
+
+      {err && <div style={{fontSize:14,color:C.now,marginBottom:14,lineHeight:1.45}}>{err}</div>}
+
+      {result && (
+        <div>
+          <div style={{fontSize:13,color:C.muted,marginBottom:10}}>Check it before you use it. Students see these titles.</div>
+          <div style={{display:"grid",gap:9,maxHeight:320,overflowY:"auto",marginBottom:16,paddingRight:4}}>
+            {result.topics.map((t,i)=>(
+              <div key={t.key} style={{border:`1px solid ${C.line}`,borderRadius:11,padding:13}}>
+                <div style={{display:"flex",gap:9,alignItems:"center",marginBottom:6}}>
+                  <span style={{fontSize:12,color:C.muted,minWidth:16}}>{i+1}</span>
+                  <input className="focusable" value={t.title}
+                    onChange={e=>setResult({...result,topics:result.topics.map((x,j)=>j===i?{...x,title:e.target.value}:x)})}
+                    style={{flex:1,fontSize:16,fontWeight:600,border:"none",background:"transparent",padding:0,outline:"none"}} />
+                  <button className="focusable" onClick={()=>setResult({...result,topics:result.topics.filter((_,j)=>j!==i)})}
+                    style={{border:"none",background:"transparent",color:C.muted,fontSize:12}}>Remove</button>
+                </div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",paddingLeft:25}}>{t.subtopics.map(x=><Tag key={x}>{x}</Tag>)}</div>
+              </div>))}
+          </div>
+          <Btn tone={{bg:C.table,fg:"#fff"}} disabled={busy||!result.topics.length} onClick={apply}>Use this as the class</Btn>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ================================================================= settings */
+
+function Settings({ onClose, onSaved }) {
+  const [s,setS]=useState(settings());
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(16,26,22,.42)",zIndex:70,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}
+      onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div style={{background:C.surface,borderRadius:16,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:26}}>
+        <div style={{fontSize:22,fontWeight:600,marginBottom:6}}>Settings</div>
+        <div style={{fontSize:15,color:C.muted,marginBottom:22,lineHeight:1.5}}>
+          Everything here is optional and stored only in this browser. Without any of it, the app runs in solo mode on this device.
+        </div>
+        <div style={{display:"grid",gap:18}}>
+          <Field label="Supabase URL" hint="Turns on live sync between devices. Settings → API in your Supabase project.">
+            <input className="focusable" value={s.supabaseUrl} onChange={e=>setS({...s,supabaseUrl:e.target.value.trim()})} placeholder="https://xxxx.supabase.co" style={inputStyle} /></Field>
+          <Field label="Supabase publishable key">
+            <input className="focusable" value={s.supabaseKey} onChange={e=>setS({...s,supabaseKey:e.target.value.trim()})} placeholder="sb_publishable_..." style={inputStyle} /></Field>
+          <Field label="Anthropic API key" hint="Only needed to read a PDF deck automatically and to reword questions. Everything else works without it.">
+            <input className="focusable" type="password" value={s.anthropicKey} onChange={e=>setS({...s,anthropicKey:e.target.value.trim()})} placeholder="sk-ant-..." style={inputStyle} /></Field>
+          <Field label="Or a proxy address" hint="Safer for anything you hand out. Deploy the project in say-it/ and put its /api/claude address here — the key stays on the server.">
+            <input className="focusable" value={s.proxyUrl} onChange={e=>setS({...s,proxyUrl:e.target.value.trim()})} placeholder="https://your-app.vercel.app/api/claude" style={inputStyle} /></Field>
+        </div>
+        <div style={{fontSize:13,color:C.muted,marginTop:18,lineHeight:1.5}}>
+          A key entered here is used straight from this browser. That's fine on your own laptop. On anything students open, use the proxy instead — otherwise they can read the key and spend your credit.
+        </div>
+        <div style={{display:"flex",gap:10,marginTop:22,flexWrap:"wrap"}}>
+          <Btn tone="solid" onClick={()=>{ saveSettings(s); onSaved(); }}>Save</Btn>
+          <Btn tone="ghost" onClick={onClose}>Cancel</Btn>
+          <div style={{marginLeft:"auto"}}>
+            <Btn tone="ghost" small onClick={resetDevice}>Reset this device</Btn>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================= shell */
+function resetDevice(){
+  if(!confirm("Reset Say it on this device? This clears the saved role, class/student session, notes, private questions, and local test data. Your shared Supabase setup stays intact.")) return;
+  ["sayit:role","sayit:session","sayit:teacherClass","sayit:solo"].forEach(LS.del);
+  Object.keys(localStorage).filter(k=>k.startsWith("sayit:private:")||k.startsWith("sayit:notes:")||k.startsWith("sayit:tkey:")).forEach(k=>localStorage.removeItem(k));
+  location.reload();
+}
+function RolePicker({choose}){
+  return <div style={{maxWidth:760,margin:"0 auto",padding:"70px 0"}}>
+    <div style={{fontSize:13,color:C.muted,marginBottom:10}}>CLASSROOM THOUGHT EXCHANGE</div>
+    <h1 style={{fontSize:48,letterSpacing:-1.5,margin:"0 0 10px"}}>Say it</h1>
+    <p style={{fontSize:20,color:C.body,lineHeight:1.5,maxWidth:620,marginBottom:34}}>A quieter way to get questions into the room — without making students fight for the moment to speak.</p>
+    <div className="split-even">
+      <button className="focusable" onClick={()=>choose("teacher")} style={{textAlign:"left",padding:26,border:`1px solid ${C.line}`,borderRadius:16,background:C.surface}}>
+        <div style={{fontSize:13,color:C.muted,marginBottom:8}}>FOR THE PERSON TEACHING</div><div style={{fontSize:28,fontWeight:600,marginBottom:8}}>I’m a teacher</div>
+        <div style={{fontSize:15,color:C.muted,lineHeight:1.5}}>Start or open a class, set the running order, see questions arrive live, and bring the room into the conversation.</div><div style={{marginTop:20,fontWeight:600}}>Continue →</div>
+      </button>
+      <button className="focusable" onClick={()=>choose("student")} style={{textAlign:"left",padding:26,border:`1px solid ${C.line}`,borderRadius:16,background:C.surface}}>
+        <div style={{fontSize:13,color:C.muted,marginBottom:8}}>FOR SOMEONE IN THE ROOM</div><div style={{fontSize:28,fontWeight:600,marginBottom:8}}>I’m a student</div>
+        <div style={{fontSize:15,color:C.muted,lineHeight:1.5}}>Join with a class code, write privately, anchor a question to the material, and choose how it reaches the room.</div><div style={{marginTop:20,fontWeight:600}}>Continue →</div>
+      </button>
+    </div>
+    <div style={{marginTop:28,display:"flex",justifyContent:"center"}}>
+      <button className="focusable" onClick={resetDevice} style={{border:`1px solid ${C.line}`,background:C.surface,color:C.body,borderRadius:10,padding:"10px 15px",fontSize:13,fontWeight:600}}>↻ Having trouble? Reset this device</button>
+    </div>
+  </div>
+}
+function App(){
+  const [role,setRole]=useState(()=>LS.get("sayit:role",null));
+  const [showSettings,setShowSettings]=useState(false);
+  const [cloud,setCloud]=useState(()=>initSupabase());
+  const store=useMemo(()=>makeStore(cloud?"cloud":"solo"),[cloud]);
+  const choose=r=>{LS.set("sayit:role",r);setRole(r)};
+  const switchRole=()=>{LS.del("sayit:role");setRole(null)};
+  return <div style={{minHeight:"100vh"}}>
+    <header style={{borderBottom:`1px solid ${C.line}`,background:C.surface}}>
+      <div style={{maxWidth:1180,margin:"0 auto",padding:"14px 20px",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{fontSize:30,fontWeight:600}}>Say it</div>
+        <span style={{fontSize:12,color:cloud?C.table:C.muted,border:`1px solid ${cloud?C.table:C.line}`,borderRadius:999,padding:"4px 10px"}}>{cloud?"live · synced":"offline · this device"}</span>
+        {role&&<span style={{fontSize:12,color:C.muted}}>{role}</span>}
+        <div style={{marginLeft:"auto",display:"flex",gap:8}}>
+          {role&&<Btn small tone="ghost" onClick={switchRole}>Switch role</Btn>}
+          <Btn small tone="ghost" onClick={()=>setShowSettings(true)}>Settings</Btn>
+        </div>
+      </div>
+    </header>
+    <main style={{maxWidth:1180,margin:"0 auto",padding:"24px 20px 80px"}}>
+      {!role?<RolePicker choose={choose}/>:role==="teacher"?<TeacherApp store={store} onSwitch={()=>choose("student")}/>:<StudentApp store={store} onSwitch={()=>choose("teacher")}/>}
+    </main>
+    {role&&<div style={{maxWidth:1180,margin:"-35px auto 0",padding:"0 20px 40px",textAlign:"right"}}><button className="focusable" onClick={resetDevice} style={{border:`1px solid ${C.line}`,background:C.surface,color:C.body,borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:600}}>↻ Reset this device</button></div>}
+    {showSettings&&<Settings onClose={()=>setShowSettings(false)} onSaved={()=>{setCloud(initSupabase());setShowSettings(false)}}/>}
+  </div>
+}
+var _boot=document.getElementById("boot");if(_boot)_boot.remove();ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script></body></html>
