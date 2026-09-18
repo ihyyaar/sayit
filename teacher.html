@@ -1008,20 +1008,41 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         const { error } = await sb.from("thoughts").update({ visibility, status: visibility === "now" ? "ready" : "captured" }).eq("id", t.id);
         if (error) throw error;
       },
-      // Clear / not clear on the topic that's running. Per student, per topic.
-      async setPulse(classId, topicId, studentId, v) {
-        const key = "sayit:pulse:" + classId;
-        const all = LS.get(key, {});
-        const t = all[topicId] || {};
-        if (t[studentId] === v) delete t[studentId];
-        else t[studentId] = v;
-        all[topicId] = t;
-        LS.set(key, all);
-        window.dispatchEvent(new Event("solo-change"));
+      // Clear / not clear, per student, per subtopic. subtopic_idx is the
+      // position in topics.subtopics; -1 is the topic itself, used when a topic
+      // has no subtopics. Tapping the vote you already hold clears it.
+      async setPulse(classId, topicId, subtopicIdx, studentId, v) {
+        if (solo) {
+          const d = soloRead();
+          const rows = (d.pulses || []).filter((p) => !(p.topic_id === topicId && p.subtopic_idx === subtopicIdx && p.student_id === studentId));
+          const had = (d.pulses || []).find((p) => p.topic_id === topicId && p.subtopic_idx === subtopicIdx && p.student_id === studentId);
+          if (!had || had.value !== v) rows.push({ class_id: classId, topic_id: topicId, subtopic_idx: subtopicIdx, student_id: studentId, value: v });
+          d.pulses = rows;
+          soloWrite(d);
+          return;
+        }
+        const { data: had, error: readError } = await sb.from("topic_pulse").select("value")
+          .eq("topic_id", topicId).eq("subtopic_idx", subtopicIdx).eq("student_id", studentId).maybeSingle();
+        if (readError) throw readError;
+        if (had && had.value === v) {
+          const { error } = await sb.from("topic_pulse").delete()
+            .eq("topic_id", topicId).eq("subtopic_idx", subtopicIdx).eq("student_id", studentId);
+          if (error) throw error;
+          return;
+        }
+        // The primary key is (topic_id, subtopic_idx, student_id), so this
+        // replaces an opposite vote rather than adding a second one.
+        const { error } = await sb.from("topic_pulse").upsert({
+          class_id: classId, topic_id: topicId, subtopic_idx: subtopicIdx,
+          student_id: studentId, value: v, updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        });
+        if (error) throw error;
       },
-      pulse(classId, topicId) {
-        const all = LS.get("sayit:pulse:" + classId, {});
-        return all[topicId] || {};
+      async pulses(classId) {
+        if (solo) return (soloRead().pulses || []).filter((p) => p.class_id === classId);
+        const { data, error } = await sb.from("topic_pulse").select("topic_id,subtopic_idx,student_id,value").eq("class_id", classId);
+        if (error) throw error;
+        return data || [];
       },
       async status(id, status) {
         if (solo) {
@@ -1153,7 +1174,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           };
         }
         const poll = setInterval(onChange, 8e3);
-        const ch = sb.channel("class:" + classId).on("postgres_changes", { event: "*", schema: "public", table: "thoughts", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "queue", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "classes", filter: `id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "topics", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "students", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "replies" }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, onChange).subscribe((status) => {
+        const ch = sb.channel("class:" + classId).on("postgres_changes", { event: "*", schema: "public", table: "thoughts", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "queue", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "classes", filter: `id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "topics", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "students", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "replies" }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "topic_pulse", filter: `class_id=eq.${classId}` }, onChange).subscribe((status) => {
           if (onStatus) onStatus(status);
         });
         return () => {
@@ -1374,6 +1395,13 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     return /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { color: C.ink }) }, "The running order"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginTop: S.x025, marginBottom: S.x200 }) }, state.topics.length ? "Tap one to put it on now." : "Nothing yet. Add the deck you're teaching from and the class builds itself."), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x100 } }, state.topics.map((tp) => {
       const on = tp.id === state.klass.current_topic_id;
       const n = state.anchors.filter((a) => a.topic_id === tp.id).length;
+      const subs = tp.subtopics || [];
+      const rows = (state.pulses || []).filter((p) => p.topic_id === tp.id);
+      const countAt = (idx, v) => rows.filter((p) => p.subtopic_idx === idx && p.value === v).length;
+      // Same two figures as the roll-up beside the tabs, so they read alike.
+      const Counts = ({ up, down }) => /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ display: "inline-flex", gap: S.x150, alignItems: "center", flexShrink: 0 }, F.small), {}) }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: up ? C.table : C.muted } }, /* @__PURE__ */ React.createElement(ThumbIcon, { color: up ? C.table : C.muted }), " ", up), /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: down ? C.danger : C.muted } }, /* @__PURE__ */ React.createElement(ThumbIcon, { down: true, color: down ? C.danger : C.muted }), " ", down));
+      const totalUp = rows.filter((p) => p.value === 1).length;
+      const totalDown = rows.filter((p) => p.value === -1).length;
       return /* @__PURE__ */ React.createElement(
         "button",
         {
@@ -1385,18 +1413,17 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           },
           style: {
             textAlign: "left",
+            width: "100%",
             border: `1px solid ${on ? C.ink : C.line}`,
             borderRadius: R.lg,
             background: on ? C.sunken : C.surface,
             padding: `${S.x150}px ${S.x200}px`,
-            display: "flex",
-            gap: S.x150,
-            alignItems: "baseline"
+            display: "block"
           }
         },
-        /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, tp.ord),
-        /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1 }, F.body), { fontWeight: on ? 700 : 400, color: C.ink }) }, tp.title),
-        /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, n, " anchor", n === 1 ? "" : "s")
+        /* @__PURE__ */ React.createElement("span", { style: { display: "flex", gap: S.x150, alignItems: "baseline" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, tp.ord), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1 }, F.body), { fontWeight: on ? 700 : 400, color: C.ink }) }, tp.title), !on && (totalUp > 0 || totalDown > 0) && /* @__PURE__ */ React.createElement(Counts, { up: totalUp, down: totalDown }), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, n, " anchor", n === 1 ? "" : "s")),
+        on && subs.length > 0 && /* @__PURE__ */ React.createElement("span", { style: { display: "grid", gap: S.x050, marginTop: S.x100, paddingLeft: 20 } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("span", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.small), { color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, st), /* @__PURE__ */ React.createElement(Counts, { up: countAt(idx, 1), down: countAt(idx, -1) })))),
+        on && subs.length === 0 && (totalUp > 0 || totalDown > 0) && /* @__PURE__ */ React.createElement("span", { style: { display: "flex", marginTop: S.x100, paddingLeft: 20 } }, /* @__PURE__ */ React.createElement(Counts, { up: totalUp, down: totalDown }))
       );
     })));
   }
@@ -1460,8 +1487,8 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           return;
         }
         const sh = await store.shape(k.id);
-        const [thoughts, queue, students] = await Promise.all([store.classThoughts(k.id), store.queue(k.id), store.students(k.id)]);
-        setState(__spreadProps(__spreadValues({ klass: k }, sh), { thoughts, queue, students }));
+        const [thoughts, queue, students, pulses] = await Promise.all([store.classThoughts(k.id), store.queue(k.id), store.students(k.id), store.pulses(k.id)]);
+        setState(__spreadProps(__spreadValues({ klass: k }, sh), { thoughts, queue, students, pulses }));
         setLoadErr(null);
       } catch (e) {
         console.error("Say it teacher reload failed", e);
@@ -1520,9 +1547,9 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       setScreen("courses");
     } }, "Back to my courses"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: resetDevice }, "Reset this device")))));
     const topic = state.topics.find((t) => t.id === state.klass.current_topic_id);
-    const pulse = topic ? store.pulse(state.klass.id, topic.id) : {};
-    const followingN = Object.values(pulse).filter((v) => v === 1).length;
-    const lostN = Object.values(pulse).filter((v) => v === -1).length;
+    const topicPulses = topic ? (state.pulses || []).filter((p) => p.topic_id === topic.id) : [];
+    const followingN = topicPulses.filter((p) => p.value === 1).length;
+    const lostN = topicPulses.filter((p) => p.value === -1).length;
     const all = state.thoughts;
     const live = all.filter((t) => t.visibility === "now" && t.status !== "avoided");
     const later = all.filter((t) => t.visibility === "later" && t.status !== "avoided");

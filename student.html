@@ -1120,20 +1120,41 @@ try {
         const { error } = await sb.from("thoughts").update({ visibility, status: visibility === "now" ? "ready" : "captured" }).eq("id", t.id);
         if (error) throw error;
       },
-      // Clear / not clear on the topic that's running. Per student, per topic.
-      async setPulse(classId, topicId, studentId, v) {
-        const key = "sayit:pulse:" + classId;
-        const all = LS.get(key, {});
-        const t = all[topicId] || {};
-        if (t[studentId] === v) delete t[studentId];
-        else t[studentId] = v;
-        all[topicId] = t;
-        LS.set(key, all);
-        window.dispatchEvent(new Event("solo-change"));
+      // Clear / not clear, per student, per subtopic. subtopic_idx is the
+      // position in topics.subtopics; -1 is the topic itself, used when a topic
+      // has no subtopics. Tapping the vote you already hold clears it.
+      async setPulse(classId, topicId, subtopicIdx, studentId, v) {
+        if (solo) {
+          const d = soloRead();
+          const rows = (d.pulses || []).filter((p) => !(p.topic_id === topicId && p.subtopic_idx === subtopicIdx && p.student_id === studentId));
+          const had = (d.pulses || []).find((p) => p.topic_id === topicId && p.subtopic_idx === subtopicIdx && p.student_id === studentId);
+          if (!had || had.value !== v) rows.push({ class_id: classId, topic_id: topicId, subtopic_idx: subtopicIdx, student_id: studentId, value: v });
+          d.pulses = rows;
+          soloWrite(d);
+          return;
+        }
+        const { data: had, error: readError } = await sb.from("topic_pulse").select("value")
+          .eq("topic_id", topicId).eq("subtopic_idx", subtopicIdx).eq("student_id", studentId).maybeSingle();
+        if (readError) throw readError;
+        if (had && had.value === v) {
+          const { error } = await sb.from("topic_pulse").delete()
+            .eq("topic_id", topicId).eq("subtopic_idx", subtopicIdx).eq("student_id", studentId);
+          if (error) throw error;
+          return;
+        }
+        // The primary key is (topic_id, subtopic_idx, student_id), so this
+        // replaces an opposite vote rather than adding a second one.
+        const { error } = await sb.from("topic_pulse").upsert({
+          class_id: classId, topic_id: topicId, subtopic_idx: subtopicIdx,
+          student_id: studentId, value: v, updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        });
+        if (error) throw error;
       },
-      pulse(classId, topicId) {
-        const all = LS.get("sayit:pulse:" + classId, {});
-        return all[topicId] || {};
+      async pulses(classId) {
+        if (solo) return (soloRead().pulses || []).filter((p) => p.class_id === classId);
+        const { data, error } = await sb.from("topic_pulse").select("topic_id,subtopic_idx,student_id,value").eq("class_id", classId);
+        if (error) throw error;
+        return data || [];
       },
       async status(id, status) {
         if (solo) {
@@ -1265,7 +1286,7 @@ try {
           };
         }
         const poll = setInterval(onChange, 8e3);
-        const ch = sb.channel("class:" + classId).on("postgres_changes", { event: "*", schema: "public", table: "thoughts", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "queue", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "classes", filter: `id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "topics", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "students", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "replies" }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, onChange).subscribe((status) => {
+        const ch = sb.channel("class:" + classId).on("postgres_changes", { event: "*", schema: "public", table: "thoughts", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "queue", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "classes", filter: `id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "topics", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "students", filter: `class_id=eq.${classId}` }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "replies" }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, onChange).on("postgres_changes", { event: "*", schema: "public", table: "topic_pulse", filter: `class_id=eq.${classId}` }, onChange).subscribe((status) => {
           if (onStatus) onStatus(status);
         });
         return () => {
@@ -1466,8 +1487,8 @@ try {
           return;
         }
         const shape = await store.shape(k.id);
-        const [thoughts, queue, students] = await Promise.all([store.classThoughts(k.id), store.queue(k.id), store.students(k.id)]);
-        setState(__spreadProps(__spreadValues({ klass: k }, shape), { thoughts, queue, students }));
+        const [thoughts, queue, students, pulses] = await Promise.all([store.classThoughts(k.id), store.queue(k.id), store.students(k.id), store.pulses(k.id)]);
+        setState(__spreadProps(__spreadValues({ klass: k }, shape), { thoughts, queue, students, pulses }));
         setLoadErr(null);
         pullFeed.current();
       } catch (e) {
@@ -1604,13 +1625,50 @@ try {
         setToast({ bad: true, text: "Couldn't delete it." });
       }
     }
-    const pulse = current ? store.pulse(state.klass.id, current.id) : {};
-    const myPulse = pulse[me.id];
-    async function setPulse(v) {
+    const subs = current ? current.subtopics || [] : [];
+    // -1 is the topic itself, which is what a topic with no subtopics votes on.
+    const myVote = (idx) => {
+      const row = (state.pulses || []).find((p) => current && p.topic_id === current.id && p.subtopic_idx === idx && p.student_id === me.id);
+      return row ? row.value : void 0;
+    };
+    async function setPulse(idx, v) {
       if (!current) return;
-      await store.setPulse(state.klass.id, current.id, me.id, v);
+      try {
+        await store.setPulse(state.klass.id, current.id, idx, me.id, v);
+        await refresh();
+      } catch (e) {
+        setToast({ bad: true, text: "Couldn't send that." });
+      }
       setTick((n) => n + 1);
     }
+    // The same pair of buttons in both places, so the two read as one control.
+    const Thumbs = ({ idx, size }) => /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x050, flexShrink: 0 } }, [[1, "Following this"], [-1, "Lost me"]].map(([v, label]) => {
+      const on = myVote(idx) === v;
+      return /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: v,
+          className: "focusable",
+          title: label,
+          "aria-label": label,
+          "aria-pressed": on,
+          onClick: () => setPulse(idx, v),
+          style: {
+            width: size,
+            height: size,
+            borderRadius: R.md,
+            padding: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: `1px solid ${on ? "transparent" : C.onInkLine}`,
+            background: on ? C.onInk : "transparent",
+            transition: `background-color 150ms ${EASE}`
+          }
+        },
+        /* @__PURE__ */ React.createElement(ThumbIcon, { down: v === -1, color: on ? C.now : C.onInk })
+      );
+    }));
     const TopicRow = ({ t, tone }) => /* @__PURE__ */ React.createElement("div", { style: { padding: `${S.x100}px ${S.x150}px`, display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), {
       color: C.muted,
       overflow: "hidden",
@@ -1646,38 +1704,12 @@ try {
         })
       },
       (me.name || "?").slice(0, 1).toUpperCase()
-    )), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: S.x150, gap: S.x150 } }, loadErr && /* @__PURE__ */ React.createElement(Banner, { tone: "bad", title: "Can't reach the class" }, loadErr), /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x050, flexShrink: 0 } }, previous && /* @__PURE__ */ React.createElement(TopicRow, { t: previous, tone: "done" }), current ? /* @__PURE__ */ React.createElement("div", { style: { background: C.now, borderRadius: R.md, padding: `${S.x100}px ${S.x150}px` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: S.x100 } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: S.x075, marginBottom: S.x050 } }, /* @__PURE__ */ React.createElement("span", { className: "livedot", style: { width: 6, height: 6, borderRadius: R.full, background: C.onInk, flexShrink: 0 } }), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { fontWeight: 700, color: C.onInkSoft, letterSpacing: 0.3 }) }, "ON NOW")), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.onInk }) }, current.title)), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x050, flexShrink: 0 } }, [[1, "Following this"], [-1, "Lost me"]].map(([v, label]) => {
-      const on = myPulse === v;
-      return /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          key: v,
-          className: "focusable",
-          title: label,
-          "aria-label": label,
-          "aria-pressed": on,
-          onClick: () => setPulse(v),
-          style: {
-            width: 28,
-            height: 28,
-            borderRadius: R.md,
-            padding: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: `1px solid ${on ? "transparent" : C.onInkLine}`,
-            background: on ? C.onInk : "transparent",
-            transition: `background-color 150ms ${EASE}`
-          }
-        },
-        /* @__PURE__ */ React.createElement(ThumbIcon, { down: v === -1, color: on ? C.now : C.onInk })
-      );
-    }))), (current.subtopics || []).length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: S.x050, marginTop: S.x100 } }, current.subtopics.map((st) => /* @__PURE__ */ React.createElement("span", { key: st, style: __spreadProps(__spreadValues({}, F.small), {
+    )), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: S.x150, gap: S.x150 } }, loadErr && /* @__PURE__ */ React.createElement(Banner, { tone: "bad", title: "Can't reach the class" }, loadErr), /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x050, flexShrink: 0 } }, previous && /* @__PURE__ */ React.createElement(TopicRow, { t: previous, tone: "done" }), current ? /* @__PURE__ */ React.createElement("div", { style: { background: C.now, borderRadius: R.md, padding: `${S.x100}px ${S.x150}px` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: S.x100 } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: S.x075, marginBottom: S.x050 } }, /* @__PURE__ */ React.createElement("span", { className: "livedot", style: { width: 6, height: 6, borderRadius: R.full, background: C.onInk, flexShrink: 0 } }), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { fontWeight: 700, color: C.onInkSoft, letterSpacing: 0.3 }) }, "ON NOW")), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.onInk }) }, current.title)), subs.length === 0 && /* @__PURE__ */ React.createElement(Thumbs, { idx: -1, size: 28 })), subs.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x100 } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("div", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.small), {
       color: C.onInk,
       background: C.onInkLine,
       borderRadius: R.sm,
       padding: `${S.x025}px ${S.x075}px`
-    }) }, st)))) : /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({ padding: S.x150 }, F.body), { color: C.muted }) }, "Nothing set yet"), next && /* @__PURE__ */ React.createElement(TopicRow, { t: next, tone: "next" })), /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x150, flexShrink: 0 } }, /* @__PURE__ */ React.createElement(
+    }) }, st), /* @__PURE__ */ React.createElement(Thumbs, { idx, size: 24 }))))) : /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({ padding: S.x150 }, F.body), { color: C.muted }) }, "Nothing set yet"), next && /* @__PURE__ */ React.createElement(TopicRow, { t: next, tone: "next" })), /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x150, flexShrink: 0 } }, /* @__PURE__ */ React.createElement(
       "textarea",
       {
         ref: boxRef,
