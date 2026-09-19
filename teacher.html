@@ -739,13 +739,13 @@ try {
     };
     return { items, push, dismiss };
   }
-  const Notices = ({ items, onDismiss, place }) => items.length === 0 ? null : /* @__PURE__ */ React.createElement("div", { className: "fl-notices", role: "status", "aria-live": "polite", style: place }, items.map((n) => /* @__PURE__ */ React.createElement("div", { key: n.id, className: "fl-notice" + (n.leaving ? " fl-leaving" : ""), "data-notice": n.kind, style: { display: "flex", width: "100%", background: C.surface, border: `1px solid ${C.flCard}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 6px 18px rgba(0,0,0,.14)" } },
+  const Notices = ({ items, onDismiss, place }) => items.length === 0 ? null : /* @__PURE__ */ React.createElement("div", { className: "fl-notices", role: "status", "aria-live": "polite", style: place }, items.map((n) => /* @__PURE__ */ React.createElement("div", { key: n.id, className: "fl-notice" + (n.leaving ? " fl-leaving" : ""), "data-notice": n.kind, style: { display: "flex", width: "100%", background: C.laterSoft, border: `1px solid ${C.tCur}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 6px 18px rgba(0,0,0,.18)" } },
     /* @__PURE__ */ React.createElement("div", { style: { width: 8, flexShrink: 0, background: n.kind === "now" ? C.aNow : C.aTable } }),
     /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, padding: "10px 12px" } },
       /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
         /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, lineHeight: "16px", fontWeight: 700, color: C.aInk, background: n.kind === "now" ? C.aNow : C.aTable, borderRadius: 999, padding: "1px 8px", flexShrink: 0 } }, n.kind === "now" ? "say now" : "table"),
         /* @__PURE__ */ React.createElement("span", { style: { flex: 1, minWidth: 0, fontSize: 14, lineHeight: "20px", fontWeight: 600, color: C.ink } }, n.title),
-        /* @__PURE__ */ React.createElement("button", { className: "focusable", "aria-label": "Dismiss", title: "Dismiss", onClick: () => onDismiss(n.id), style: { border: "none", background: "transparent", color: C.muted, width: 24, height: 24, borderRadius: 6, fontSize: 16, lineHeight: "20px", padding: 0, flexShrink: 0 } }, "\xD7")),
+        /* @__PURE__ */ React.createElement("button", { className: "focusable", "aria-label": "Dismiss", title: "Dismiss", onClick: () => onDismiss(n.id), style: { border: "none", background: "transparent", color: C.body, width: 24, height: 24, borderRadius: 6, fontSize: 16, lineHeight: "20px", padding: 0, flexShrink: 0 } }, "\xD7")),
       n.body && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 4, fontSize: 13, lineHeight: "18px", color: C.body, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } }, n.body)))));
   const uid = (p) => p + "_" + Math.random().toString(36).slice(2, 9);
   function makeStudentLink(code) {
@@ -1747,13 +1747,13 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     },
     children
   );
-  // The queue to speak, top right in the header: everyone whose "say now"
-  // question is still waiting, first come first served, one entry per
-  // student. Giving the floor sets the question to "taking" (the student's
-  // "The floor is yours" card) and takes them out of the queue; marking it
-  // addressed, moving it or avoiding it does the same. Derived entirely from
-  // thoughts, so it updates with the board's Realtime reload.
-  function SpeakQueue({ state, store, reload }) {
+  // The queue to speak, top right in the header: a compact "N waiting"
+  // indicator. Hovering it (or focusing it, or tapping it on touch) shows who
+  // is waiting and what they asked, first come first served, one entry per
+  // student (each anonymous question on its own). Information only: the
+  // queue empties as questions are addressed, moved or avoided. Derived
+  // entirely from thoughts, so it updates with the board's Realtime reload.
+  function SpeakQueue({ state }) {
     const h = React.createElement;
     const [open, setOpen] = useState(false);
     const nameOf = (t) => t.students && t.students.name || "Someone";
@@ -1769,28 +1769,23 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     });
     const n = people.length;
     const canAlert = typeof Notification !== "undefined" && Notification.permission === "default";
-    const setQ = async (t, status) => {
-      await store.status(t.id, status);
-      reload();
-    };
-    const row = (key, label, t, action) => h("div", { key, "data-queue-row": label, style: { padding: "8px 0", borderTop: `1px solid ${C.flBox}` } },
+    const row = (key, label, t) => h("div", { key, "data-queue-row": label, style: { padding: "8px 0", borderTop: `1px solid ${C.flBox}` } },
       h("div", { style: { fontSize: 13, lineHeight: "18px", fontWeight: 600, color: C.ink } }, label),
-      h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.body, margin: "2px 0 6px", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } }, t.text),
-      action);
-    return h("div", { "data-queue": n, style: { position: "relative" } },
-      h("button", { className: "focusable", "aria-expanded": open, onClick: () => setOpen(!open), title: "Students waiting to speak", style: { display: "inline-flex", alignItems: "center", gap: 8, height: 32, padding: "0 12px 0 6px", borderRadius: 999, border: `1px solid ${n ? C.aNow : C.flField}`, background: n ? C.tabNow : C.surface, color: C.ink, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" } },
+      h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.body, marginTop: 2, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } }, t.text));
+    return h("div", { "data-queue": n, onMouseEnter: () => setOpen(true), onMouseLeave: () => setOpen(false), onFocus: () => setOpen(true), onBlur: (e) => {
+      if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
+    }, style: { position: "relative" } },
+      h("button", { className: "focusable", "aria-expanded": open, "aria-haspopup": "true", "aria-label": `${n} waiting to speak`, onClick: () => setOpen(!open), style: { display: "inline-flex", alignItems: "center", gap: 8, height: 32, padding: "0 12px 0 6px", borderRadius: 999, border: `1px solid ${n ? C.aNow : C.flField}`, background: n ? C.tabNow : C.surface, color: C.ink, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" } },
         h("span", { style: { minWidth: 22, height: 22, borderRadius: 999, background: n ? C.aNow : C.chip, color: n ? C.aInk : C.chipInk, fontSize: 12, lineHeight: "22px", textAlign: "center", padding: "0 6px" } }, n),
-        n ? "waiting to speak" : "no one waiting",
-        n > 0 && h("span", { style: { fontWeight: 400, color: C.body, maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis" } }, people.slice(0, 2).map((x) => x.name).join(", ") + (n > 2 ? ` +${n - 2}` : ""))),
-      open && h("div", { "data-queue-panel": "1", style: { position: "absolute", right: 0, top: "calc(100% + 6px)", width: 340, maxWidth: "calc(100vw - 32px)", background: C.surface, border: `1px solid ${C.flBox}`, borderRadius: 10, boxShadow: "0 6px 18px rgba(0,0,0,.14)", padding: "10px 12px", zIndex: 40, textAlign: "left" } },
-        h("div", { style: { display: "flex", alignItems: "center", marginBottom: 6 } },
-          h("div", { style: { flex: 1, fontSize: 13, fontWeight: 700, color: C.ink } }, "Queue to speak"),
-          h("button", { className: "focusable", "aria-label": "Close", onClick: () => setOpen(false), style: { border: "none", background: "transparent", color: C.muted, width: 24, height: 24, borderRadius: 6, fontSize: 16, padding: 0 } }, "\xD7")),
-        floor.map((t) => row("f" + t.id, nameOf(t) + " has the floor", t, h(Pill, { bg: C.aNow, fg: C.aInk, onClick: () => setQ(t, "addressed") }, "Mark addressed"))),
-        people.map((x, i) => row(x.key, `${i + 1}. ${x.name}` + (x.qs.length > 1 ? ` \xB7 ${x.qs.length} questions` : ""), x.qs[0], h(Pill, { bg: C.tCur, fg: C.tCurInk, onClick: () => setQ(x.qs[0], "taking") }, "Give the floor"))),
+        "waiting"),
+      // paddingTop bridges the gap, so moving onto the popover keeps it open
+      open && h("div", { "data-queue-panel": "1", role: "tooltip", style: { position: "absolute", right: 0, top: "100%", paddingTop: 6, width: 340, maxWidth: "calc(100vw - 32px)", zIndex: 40, textAlign: "left" } }, h("div", { style: { background: C.surface, border: `1px solid ${C.flBox}`, borderRadius: 10, boxShadow: "0 6px 18px rgba(0,0,0,.14)", padding: "10px 12px" } },
+        h("div", { style: { fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: 6 } }, "Queue to speak"),
+        floor.map((t) => row("f" + t.id, nameOf(t) + " has the floor", t)),
+        people.map((x, i) => row(x.key, `${i + 1}. ${x.name}` + (x.qs.length > 1 ? ` \xB7 ${x.qs.length} questions` : ""), x.qs[0])),
         n === 0 && floor.length === 0 && h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.muted, padding: "8px 0", borderTop: `1px solid ${C.flBox}` } }, "No one is waiting. Say now questions line up here."),
         canAlert && h("button", { className: "focusable fl-link", onClick: () => Notification.requestPermission().catch(() => {
-        }), style: { border: "none", background: "transparent", padding: 0, marginTop: 8, fontSize: 12, color: C.body, textDecoration: "underline" } }, "Also alert me when this tab is in the background")));
+        }), style: { border: "none", background: "transparent", padding: 0, marginTop: 8, fontSize: 12, color: C.body, textDecoration: "underline" } }, "Also alert me when this tab is in the background"))));
   }
   function TeacherApp({ store, openable, tools }) {
     const [klass, setKlass] = useState(() => LS.get("sayit:teacherClass", null));
@@ -1929,9 +1924,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     const liveRow = (t) => {
       const pill = (bg, fg, label, onClick) => /* @__PURE__ */ React.createElement(Pill, { key: label, bg, fg, onClick }, label);
       const actions = isAnswered(t) ? [pill(C.flGrey, C.flGreyInk, "Reopen", () => setQ(t, "seen"))] : [
-        t.status !== "taking" && pill(C.tCur, C.tCurInk, "Give the floor", () => setQ(t, "taking")),
         pill(C.aNow, C.aInk, "Mark addressed", () => setQ(t, "addressed")),
-        pill(C.flGrey, C.flGreyInk, t.status === "marked" ? "Unmark" : "Mark to come back", () => setQ(t, t.status === "marked" ? "seen" : "marked")),
         pill(C.aLater, C.aInk, "Take later", async () => {
           await store.move(t, "later", state.klass.id);
           reload();
@@ -1943,7 +1936,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     const header = /* @__PURE__ */ React.createElement(ClassHeader, { state, store, reload, onToast: setToast, firstRun: screen === "setup", onViewSetup: () => setTab("setup") });
     if (screen === "setup") {
       const ready = state.topics.length > 0;
-      return /* @__PURE__ */ React.createElement(FacultyChrome, { status: state.klass.status, tools, onHome: goHome, queue: /* @__PURE__ */ React.createElement(SpeakQueue, { state, store, reload }) }, /* @__PURE__ */ React.createElement(Notices, { items: notices.items, onDismiss: notices.dismiss, place: { top: 76, right: 16, width: 360, maxWidth: "calc(100vw - 32px)" } }), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { fontWeight: 600, color: C.muted, letterSpacing: 0.3, marginBottom: S.x100 }) }, "STEP 1 OF 2 \xB7 SET THE CLASS UP"), header, /* @__PURE__ */ React.createElement("div", { style: {
+      return /* @__PURE__ */ React.createElement(FacultyChrome, { status: state.klass.status, tools, onHome: goHome, queue: /* @__PURE__ */ React.createElement(SpeakQueue, { state }) }, /* @__PURE__ */ React.createElement(Notices, { items: notices.items, onDismiss: notices.dismiss, place: { top: 76, right: 16, width: 360, maxWidth: "calc(100vw - 32px)" } }), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { fontWeight: 600, color: C.muted, letterSpacing: 0.3, marginBottom: S.x100 }) }, "STEP 1 OF 2 \xB7 SET THE CLASS UP"), header, /* @__PURE__ */ React.createElement("div", { style: {
         background: C.tNext,
         border: `1px solid ${C.flBox}`,
         borderTop: "none",
@@ -1970,7 +1963,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         "Start the session"
       ))), /* @__PURE__ */ React.createElement(Toast, { message: toast }));
     }
-    return /* @__PURE__ */ React.createElement(FacultyChrome, { status: state.klass.status, tools, onHome: goHome, queue: /* @__PURE__ */ React.createElement(SpeakQueue, { state, store, reload }) }, /* @__PURE__ */ React.createElement(Notices, { items: notices.items, onDismiss: notices.dismiss, place: { top: 76, right: 16, width: 360, maxWidth: "calc(100vw - 32px)" } }), header, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x300, borderBottom: `1px solid ${C.flBox}`, marginBottom: S.x250, flexWrap: "wrap" } }, [
+    return /* @__PURE__ */ React.createElement(FacultyChrome, { status: state.klass.status, tools, onHome: goHome, queue: /* @__PURE__ */ React.createElement(SpeakQueue, { state }) }, /* @__PURE__ */ React.createElement(Notices, { items: notices.items, onDismiss: notices.dismiss, place: { top: 76, right: 16, width: 360, maxWidth: "calc(100vw - 32px)" } }), header, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x300, borderBottom: `1px solid ${C.flBox}`, marginBottom: S.x250, flexWrap: "wrap" } }, [
       ["live", "Live", liveSets.open.length],
       ["common", "Common doubts", groups.length],
       ["later", "Later", later.length],

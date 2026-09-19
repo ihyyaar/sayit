@@ -729,13 +729,13 @@ try {
     };
     return { items, push, dismiss };
   }
-  const Notices = ({ items, onDismiss, place }) => items.length === 0 ? null : /* @__PURE__ */ React.createElement("div", { className: "fl-notices", role: "status", "aria-live": "polite", style: place }, items.map((n) => /* @__PURE__ */ React.createElement("div", { key: n.id, className: "fl-notice" + (n.leaving ? " fl-leaving" : ""), "data-notice": n.kind, style: { display: "flex", width: "100%", background: C.surface, border: `1px solid ${C.flCard}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 6px 18px rgba(0,0,0,.14)" } },
+  const Notices = ({ items, onDismiss, place }) => items.length === 0 ? null : /* @__PURE__ */ React.createElement("div", { className: "fl-notices", role: "status", "aria-live": "polite", style: place }, items.map((n) => /* @__PURE__ */ React.createElement("div", { key: n.id, className: "fl-notice" + (n.leaving ? " fl-leaving" : ""), "data-notice": n.kind, style: { display: "flex", width: "100%", background: C.laterSoft, border: `1px solid ${C.tCur}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 6px 18px rgba(0,0,0,.18)" } },
     /* @__PURE__ */ React.createElement("div", { style: { width: 8, flexShrink: 0, background: n.kind === "now" ? C.aNow : C.aTable } }),
     /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, padding: "10px 12px" } },
       /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
         /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, lineHeight: "16px", fontWeight: 700, color: C.aInk, background: n.kind === "now" ? C.aNow : C.aTable, borderRadius: 999, padding: "1px 8px", flexShrink: 0 } }, n.kind === "now" ? "say now" : "table"),
         /* @__PURE__ */ React.createElement("span", { style: { flex: 1, minWidth: 0, fontSize: 14, lineHeight: "20px", fontWeight: 600, color: C.ink } }, n.title),
-        /* @__PURE__ */ React.createElement("button", { className: "focusable", "aria-label": "Dismiss", title: "Dismiss", onClick: () => onDismiss(n.id), style: { border: "none", background: "transparent", color: C.muted, width: 24, height: 24, borderRadius: 6, fontSize: 16, lineHeight: "20px", padding: 0, flexShrink: 0 } }, "\xD7")),
+        /* @__PURE__ */ React.createElement("button", { className: "focusable", "aria-label": "Dismiss", title: "Dismiss", onClick: () => onDismiss(n.id), style: { border: "none", background: "transparent", color: C.body, width: 24, height: 24, borderRadius: 6, fontSize: 16, lineHeight: "20px", padding: 0, flexShrink: 0 } }, "\xD7")),
       n.body && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 4, fontSize: 13, lineHeight: "18px", color: C.body, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } }, n.body)))));
   const Banner = ({ tone, title, children }) => {
     const map = { bad: { bg: C.dangerSub, fg: C.danger, icon: "!" }, info: { bg: C.nowSub, fg: C.now, icon: "i" } };
@@ -1685,7 +1685,7 @@ try {
     const bottom = y(items[end]) + items[end].getBoundingClientRect().height;
     return { height: Math.ceil(bt + pt + (bottom - top) + pb + bb), scrollTop: Math.max(0, Math.round(top - pt)), start, end };
   }
-  function StudentApp({ store, me, klassCode, onProfile }) {
+  function StudentApp({ store, me, klassCode, onProfile, onLeaveClass }) {
     const [state, setState] = useState(null);
     const [text, setText] = useState("");
     const [anchorId, setAnchorId] = useState(null);
@@ -2103,7 +2103,7 @@ try {
         h("span", { style: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: "18px", fontWeight: 400, color: C.tCurInk, background: "rgba(255,255,255,.35)", borderRadius: 6, padding: "3px 8px" } }, st)))));
     // Outline: sized to three topics by fitOutline, scrolls on its own. The
     // topic rows must be the scroll box's direct children for that to work.
-    const outline = current && section(reviewing ? "rate what this class covered" : "class outline",
+    const outline = current && section(reviewing ? "How well did you understand this topic?" : "class outline",
       h("div", { className: "fl-scroll", "data-outline": "1", style: { display: "grid", gap: S.x100, alignContent: "start", gridAutoRows: "max-content", height: !reviewing && outlineH ? outlineH : void 0, maxHeight: "50vh", overflowY: "auto", overscrollBehavior: "contain", paddingRight: 4 } },
         reviewing ? reviewList : earlier.map((t) => topicPill(t, "prev")),
         !reviewing && curPill,
@@ -2112,10 +2112,14 @@ try {
     // question tabs step aside so the review is the one thing to do.
     const reviewBlock = reviewing && h("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: `${S.x250}px ${S.x200}px`, background: C.surface } },
       h("div", { style: { fontSize: 28, lineHeight: "34px", fontWeight: 800, letterSpacing: -0.9, color: C.flInk } }, "class is over"),
-      h("div", { style: { fontSize: 17, lineHeight: "24px", color: C.ink, marginTop: S.x050 } }, "rate what this class covered"),
+      h("div", { style: { fontSize: 17, lineHeight: "24px", color: C.ink, marginTop: S.x050 } }, "How well did you understand this topic?"),
       h("div", { style: { fontSize: 13, lineHeight: "19px", color: C.muted, marginTop: 2, marginBottom: S.x200 } }, "Rate each part: it shows you what to go back over. Tap your answer again to clear it."),
       h("div", { "data-legend": "1", style: { display: "flex", gap: S.x200, flexWrap: "wrap", fontSize: 12, lineHeight: "16px", color: C.body, marginBottom: S.x150 } }, PULSE.map(([v, label]) => h("span", { key: v, style: { display: "inline-flex", alignItems: "center", gap: 4 } }, h(PulseIcon, { v, color: C.body }), label))),
-      h("div", { "data-outline": "1", style: { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: S.x100 } }, reviewList));
+      h("div", { "data-outline": "1", style: { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: S.x100 } }, reviewList),
+      // Leaving only forgets the class on this device: everything the student
+      // sent or rated stays as it is (ratings are saved as they are tapped).
+      onLeaveClass && h("div", { style: { marginTop: S.x250, paddingTop: S.x150, borderTop: `1px solid ${C.flBox}`, display: "flex", justifyContent: "flex-end" } },
+        h("button", { className: "focusable fl-link", "data-leave-class": "1", onClick: onLeaveClass, style: { border: "none", background: "transparent", padding: "6px 2px", fontSize: 13, lineHeight: "18px", color: C.muted, textDecoration: "underline", textDecorationColor: C.flField, cursor: "pointer" } }, "Leave class")));
     const box = (extra) => __spreadValues({ border: `1px solid ${C.flField}`, borderRadius: 12, padding: "8px 12px", fontSize: 13, lineHeight: "18px", textAlign: "left", background: C.surface, color: C.ink }, extra);
     const ask = section("ask",
       h("textarea", { ref: boxRef, className: "focusable fl-scroll", value: text, onChange: (e) => {
@@ -2181,7 +2185,7 @@ try {
       return h("div", { key: t.id }, card(t, { key: void 0, t: __spreadProps(__spreadValues({}, t), { replies: repliesOn[t.id] || [] }), mine: true, showCircle: true, social: t.visibility === "now" }),
         q2 && q2.response && h("div", { style: { margin: `-4px 0 ${S.x150}px 28px`, paddingLeft: S.x150, borderLeft: `2px solid ${C.aLater}` } }, h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted } }, "answer"), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.ink } }, q2.response)));
     }));
-    const tabs = [["table", "my table", feed.length, C.tabTable], ["class", "say now", classOpen.length, C.laterSoft], ["mine", "my questions", mine.length, C.tabNow]];
+    const tabs = [["table", "my table", feed.length, C.tabTable], ["class", "my class", classOpen.length, C.laterSoft], ["mine", "my questions", mine.length, C.tabNow]];
     const activeTab = tabs.find((x) => x[0] === pane) || tabs[0];
     const list = h("div", { style: { flex: 1, minHeight: 220, display: "flex", flexDirection: "column" } },
       h("div", { style: { display: "flex", gap: 2, flexShrink: 0 } }, tabs.map(([k, lab, n, bg]) => {
@@ -2488,6 +2492,14 @@ try {
       LS.set("sayit:theme", t);
       setThemeState(t);
     };
+    // After class: leave just this class. The name stays on the device, so
+    // the student lands on the join screen; nothing on the server changes.
+    // Unmounting StudentApp closes its Realtime channel and stops its polling.
+    const leaveClass = () => {
+      LS.del("sayit:session");
+      setSession(null);
+      setView("app");
+    };
     const leave = () => {
       LS.del("sayit:session");
       LS.del("sayit:identity");
@@ -2532,7 +2544,8 @@ try {
         store,
         me: session.student,
         klassCode: session.code,
-        onProfile: () => setView("profile")
+        onProfile: () => setView("profile"),
+        onLeaveClass: leaveClass
       }
     );
     return /* @__PURE__ */ React.createElement("div", { className: "sayit-shell", style: {
