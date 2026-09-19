@@ -1382,10 +1382,14 @@ try {
         if (error) throw error;
       },
       // Only 'now' and 'later' ever come back here.
-      async classThoughts(classId) {
+      // studentId: only that student's questions. The student app passes its
+      // own id, so other students' questions (and who asked the anonymous
+      // ones) never reach its browser; it sees them only through the masked
+      // table and class feeds.
+      async classThoughts(classId, studentId) {
         if (solo) {
           const d = soloRead();
-          return d.thoughts.filter((t) => t.visibility === "now" || t.visibility === "later").map((t) => __spreadProps(__spreadValues({}, t), { students: { name: (d.students.find((s) => s.id === t.student_id) || {}).name } }));
+          return d.thoughts.filter((t) => (t.visibility === "now" || t.visibility === "later") && (!studentId || t.student_id === studentId)).map((t) => __spreadProps(__spreadValues({}, t), { students: { name: (d.students.find((s) => s.id === t.student_id) || {}).name } }));
         }
         // Do not use PostgREST's implicit students embed here. This database has
         // two thoughts<->students relationships (thoughts_student_id_fkey and the
@@ -1393,7 +1397,7 @@ try {
         // HTTP 300 PGRST201 and blanks the whole screen. Fetch the two tables
         // separately and join them in the browser.
         const [{ data: thoughts, error: thoughtsError }, { data: roster, error: rosterError }] = await Promise.all([
-          sb.from("thoughts").select("*").eq("class_id", classId).order("created_at", { ascending: false }),
+          (studentId ? sb.from("thoughts").select("*").eq("class_id", classId).eq("student_id", studentId) : sb.from("thoughts").select("*").eq("class_id", classId)).order("created_at", { ascending: false }),
           sb.from("students").select("id,name").eq("class_id", classId)
         ]);
         if (thoughtsError) throw thoughtsError;
@@ -1416,6 +1420,44 @@ try {
         }
         const { error } = await sb.from("queue").update(patch).eq("thought_id", thoughtId);
         if (error) throw error;
+      },
+      // Say-now questions for the whole class, in the same shape as the table
+      // feed (replies, +1 count, who +1'd). Same masking as the table: an
+      // anonymous asker is named only to themselves. Before the class-say-now
+      // migration the functions don't exist, so this is simply empty.
+      async classNow(classId, viewer) {
+        if (solo) {
+          const d = soloRead();
+          return d.thoughts.filter((t) => t.class_id === classId && t.visibility === "now" && t.status !== "avoided").map((t) => __spreadProps(__spreadValues({}, t), {
+            student_id: t.anonymous && t.student_id !== viewer ? null : t.student_id,
+            student_name: t.anonymous ? "Anonymous" : (d.students.find((s) => s.id === t.student_id) || {}).name || "Someone",
+            replies: t.replies || [],
+            reaction_count: (t.reactions || []).length,
+            reacted_by: t.reactions || []
+          }));
+        }
+        const [f, r] = await Promise.all([sb.rpc("class_now_feed", { p_class_id: classId, p_viewer: viewer || null }), sb.rpc("class_now_replies", { p_class_id: classId, p_viewer: viewer || null })]);
+        if (f.error && f.error.code === "PGRST202") return [];
+        if (f.error) throw f.error;
+        if (r.error) throw r.error;
+        const by = {};
+        (r.data || []).forEach((x) => {
+          (by[x.thought_id] = by[x.thought_id] || []).push(x);
+        });
+        const feed = f.data || [];
+        const reactors = {};
+        if (feed.length) {
+          const { data: rx, error: rxError } = await sb.from("reactions").select("thought_id,student_id").in("thought_id", feed.map((t) => t.id));
+          if (rxError) throw rxError;
+          (rx || []).forEach((x) => {
+            (reactors[x.thought_id] = reactors[x.thought_id] || []).push(x.student_id);
+          });
+        }
+        return feed.map((t) => __spreadProps(__spreadValues({}, t), {
+          replies: by[t.id] || [],
+          reacted_by: reactors[t.id] || [],
+          reaction_count: (reactors[t.id] || []).length
+        }));
       },
       // viewer: the student asking. The RPCs name the asker of an anonymous
       // question (and their own follow-ups on it) only to that asker.
@@ -1534,12 +1576,14 @@ try {
     lineHeight: "16px",
     fontWeight: 500,
     background: on ? color || C.aNow : C.chip,
-    color: on ? C.aInk : C.chipInk,
+    color: on ? color === C.flGrey ? C.flGreyInk : C.aInk : C.chipInk,
     cursor: disabled ? "default" : "pointer",
     opacity: disabled ? 0.5 : 1,
     whiteSpace: "nowrap"
   } }, children);
-  function QuestionCard({ t, anchors, topics, mine, me, busy, onMove, onRecall, onDelete, onReply, onReact, onResolve, onEdit, showCircle }) {
+  // social: the question is open to the class (the say-now feed), so it
+  // takes +1s and follow-ups the way a table question does.
+  function QuestionCard({ t, anchors, topics, mine, me, busy, onMove, onRecall, onDelete, onReply, onReact, onResolve, onEdit, showCircle, social }) {
     const h = React.createElement;
     const [open, setOpen] = useState(false);
     const [reply, setReply] = useState("");
@@ -1562,9 +1606,11 @@ try {
     const replies = t.replies || [];
     const reacted = (t.reacted_by || []).includes(me && me.id);
     const isTable = t.visibility === "table";
+    const shared = isTable || !!social;
+    const accent = isTable ? C.aTable : C.aNow;
     // A thread stays visible once it has follow-ups, even if the question has
     // since moved off the table; new follow-ups are only for table questions.
-    const threaded = isTable || replies.length > 0;
+    const threaded = shared || replies.length > 0;
     const stripe = stripeOf(t.visibility);
     const recallable = mine && withinRecall(t);
     const canEdit = mine && !done && !called;
@@ -1583,8 +1629,8 @@ try {
       canEdit && h("button", { className: "focusable", title: "Edit", "aria-label": "Edit", onClick: () => { setDraft(t.text); setEditing(true); }, style: { border: "none", background: "transparent", padding: 5, borderRadius: R.md, display: "flex", cursor: "pointer" } }, h(PencilIcon, { color: C.flPencil })),
       recallable && h("button", { className: "focusable", title: "Delete", "aria-label": "Delete", onClick: () => setConfirm(true), style: { border: "none", background: "transparent", padding: 5, borderRadius: R.md, display: "flex", cursor: "pointer" } }, h(TrashIcon, { color: C.flTrash })));
     const chips = (threaded || mine && !done && !called && !editing) && h("div", { style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: S.x100 } },
-      isTable && !mine && h(Chip, { onClick: () => onReact(t, reacted), on: reacted, color: C.aTable, title: "Same question" }, "+1", t.reaction_count > 0 ? " \xB7 " + t.reaction_count : ""),
-      isTable && mine && t.reaction_count > 0 && h("span", { style: { fontSize: 11, lineHeight: "16px", fontWeight: 500, color: C.chipInk, background: C.chip, borderRadius: R.full, padding: "2px 9px" } }, "+", t.reaction_count),
+      shared && !mine && h(Chip, { onClick: () => onReact(t, reacted), on: reacted, color: accent, title: "Same question" }, "+1", t.reaction_count > 0 ? " \xB7 " + t.reaction_count : ""),
+      shared && mine && t.reaction_count > 0 && h("span", { style: { fontSize: 11, lineHeight: "16px", fontWeight: 500, color: C.chipInk, background: C.chip, borderRadius: R.full, padding: "2px 9px" } }, "+", t.reaction_count),
       threaded && h(Chip, { onClick: () => setOpen(!open), on: open, color: C.flGrey }, replies.length ? `${replies.length} follow up${replies.length > 1 ? "s" : ""}` : "Add a follow up"),
       mine && !done && !called && !editing && h("div", { className: "fl-tools", style: { display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" } },
         h("span", { style: { fontSize: 11, color: C.muted } }, "send to"),
@@ -1592,8 +1638,8 @@ try {
         recallable && h(Chip, { disabled: busy, onClick: () => onRecall(t), title: "Take it back into your box" }, "take back")));
     const thread = threaded && open && h("div", { "data-thread": t.id, style: { marginTop: S.x100, marginLeft: 2, paddingLeft: S.x150, borderLeft: `2px solid ${stripe}`, display: "grid", gap: S.x100 } },
       replies.map((r) => h("div", { key: r.id }, h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted } }, r.student_name, " \xB7 ", relTime(r.created_at)), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.ink } }, r.text))),
-      isTable && h("textarea", { className: "focusable", value: reply, onChange: (e) => setReply(e.target.value), placeholder: "add a follow up", style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 44, resize: "none", fontSize: 13, borderColor: C.flField, borderRadius: R.lg }) }),
-      isTable && reply.trim() && h("div", null, h(Chip, { on: true, color: C.aTable, disabled: posting, onClick: async () => {
+      shared && h("textarea", { className: "focusable", value: reply, onChange: (e) => setReply(e.target.value), placeholder: "add a follow up", style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 44, resize: "none", fontSize: 13, borderColor: C.flField, borderRadius: R.lg }) }),
+      shared && reply.trim() && h("div", null, h(Chip, { on: true, color: accent, disabled: posting, onClick: async () => {
         setPosting(true);
         const ok = await onReply(t, reply.trim());
         setPosting(false);
@@ -1648,6 +1694,10 @@ try {
     const [wording, setWording] = useState(false);
     const [original, setOriginal] = useState(null);
     const [feed, setFeed] = useState([]);
+    // Say-now questions from the whole class (read through the masked feed).
+    const [classFeed, setClassFeed] = useState([]);
+    const pullClass = useRef(() => {
+    });
     // Per question, and always back to "on" after a send.
     const [showName, setShowName] = useState(true);
     // Topic check (during class): asked once when the current topic moves on.
@@ -1691,11 +1741,12 @@ try {
           return;
         }
         const shape = await store.shape(k.id);
-        const [thoughts, queue, students, pulses] = await Promise.all([store.classThoughts(k.id), store.queue(k.id), store.students(k.id), store.pulses(k.id)]);
+        const [thoughts, queue, students, pulses] = await Promise.all([store.classThoughts(k.id, me.id), store.queue(k.id), store.students(k.id), store.pulses(k.id)]);
         const replies = await store.repliesFor(thoughts.filter((t) => t.student_id === me.id).map((t) => t.id));
         setState(__spreadProps(__spreadValues({ klass: k }, shape), { thoughts, queue, students, pulses, replies }));
         setLoadErr(null);
         pullFeed.current();
+        pullClass.current();
       } catch (e) {
         setLoadErr(e.message || "Couldn't reach the class.");
       }
@@ -1729,6 +1780,23 @@ try {
         };
       };
     }, [me.table_id]);
+    useEffect(() => {
+      if (!me.class_id) return;
+      let alive = true;
+      const pull = () => store.classNow(me.class_id, me.id).then((f) => {
+        if (alive) setClassFeed(f);
+      }).catch(() => {
+      });
+      pullClass.current = pull;
+      pull();
+      const id = setInterval(pull, 15e3);
+      return () => {
+        alive = false;
+        clearInterval(id);
+        pullClass.current = () => {
+        };
+      };
+    }, [me.class_id]);
     useEffect(() => {
       const id = setInterval(() => setTick((n) => n + 1), 3e4);
       return () => clearInterval(id);
@@ -1901,6 +1969,7 @@ try {
         await store.reply(th.id, me.id, body);
         await refresh();
         if (me.table_id) setFeed(await store.tableFeed(me.table_id, me.id));
+        pullClass.current();
         return true;
       } catch (e) {
         setToast({ bad: true, text: "Couldn't add that follow-up." });
@@ -2097,16 +2166,22 @@ try {
     const empty = (title, body) => h("div", { style: { padding: `${S.x400 || 32}px ${S.x200}px`, textAlign: "center" } }, h("div", { style: { fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 4 } }, title), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.muted } }, body));
     const card = (t, extra) => h(QuestionCard, __spreadValues({ key: t.id, t, anchors: state.anchors, topics: state.topics, me, busy: sending, mine: t.student_id === me.id, onMove: move, onRecall: recall, onDelete: del, onReply: addReply, onReact: async (th, on) => {
       await store.react(th.id, me.id, on);
-      setFeed(await store.tableFeed(me.table_id, me.id));
+      if (th.visibility === "table") setFeed(await store.tableFeed(me.table_id, me.id));
+      else pullClass.current();
     }, onResolve: resolveMine, onEdit: editMine }, extra));
-    const paneBody = pane === "table" ? h("div", null,
+    // Say now, class-wide: open questions first, then the answered ones.
+    const classOpen = classFeed.filter((t) => !DONE.includes(t.status));
+    const classList = classOpen.concat(classFeed.filter((t) => DONE.includes(t.status)));
+    const paneBody = pane === "class" ? h("div", { "data-pane": "class" },
+      h("div", { style: { fontSize: 12, lineHeight: "16px", color: C.muted, marginBottom: S.x150 } }, "Say now questions from the whole class. +1 one you share, or add a follow-up."),
+      classList.length === 0 ? empty("no say now questions yet", "anything sent with send now shows up here for everyone.") : classList.map((t) => card(t, { showCircle: false, social: true }))) : pane === "table" ? h("div", null,
       mates.length > 0 && h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: S.x150 } }, mates.map((s) => h("span", { key: s.id, style: { fontSize: 11, lineHeight: "16px", fontWeight: s.id === me.id ? 600 : 400, color: C.chipInk, background: C.chip, borderRadius: R.full, padding: "2px 9px" } }, s.id === me.id ? "You" : s.name))),
       feed.length === 0 ? empty("nothing from your table yet", "share something here to try it on a few people first.") : feed.map((t) => card(t, { showCircle: false }))) : h("div", null, mine.length === 0 ? empty("nothing yet", "whatever you send shows up here.") : mine.map((t) => {
       const q2 = state.queue.find((x) => x.thought_id === t.id);
-      return h("div", { key: t.id }, card(t, { key: void 0, t: __spreadProps(__spreadValues({}, t), { replies: repliesOn[t.id] || [] }), mine: true, showCircle: true }),
+      return h("div", { key: t.id }, card(t, { key: void 0, t: __spreadProps(__spreadValues({}, t), { replies: repliesOn[t.id] || [] }), mine: true, showCircle: true, social: t.visibility === "now" }),
         q2 && q2.response && h("div", { style: { margin: `-4px 0 ${S.x150}px 28px`, paddingLeft: S.x150, borderLeft: `2px solid ${C.aLater}` } }, h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted } }, "answer"), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.ink } }, q2.response)));
     }));
-    const tabs = [["table", "my table", feed.length, C.tabTable], ["mine", "my questions", mine.length, C.tabNow]];
+    const tabs = [["table", "my table", feed.length, C.tabTable], ["class", "say now", classOpen.length, C.laterSoft], ["mine", "my questions", mine.length, C.tabNow]];
     const activeTab = tabs.find((x) => x[0] === pane) || tabs[0];
     const list = h("div", { style: { flex: 1, minHeight: 220, display: "flex", flexDirection: "column" } },
       h("div", { style: { display: "flex", gap: 2, flexShrink: 0 } }, tabs.map(([k, lab, n, bg]) => {

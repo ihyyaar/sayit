@@ -1689,7 +1689,9 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       marginBottom: S.x200
     } }, t.text), thread, children);
   }
-  // The table discussion that led to a question, seen from the faculty side:
+  // The discussion around a question, seen from the faculty side (a later
+  // question's comes from its table; a say-now question can also gather
+  // follow-ups and +1s from the whole class after it was sent):
   // the same 2px thread line the students see under it at their table. The
   // card's own text is the original question; below it, in the order they
   // happened, each follow-up (with its author, as the table sees it) and each
@@ -1716,13 +1718,13 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     const chip = (text, bg, fg = C.aInk) => h("span", { style: { display: "inline-block", fontSize: 11, lineHeight: "16px", fontWeight: 600, color: fg, background: bg, borderRadius: R.full, padding: "1px 8px", marginRight: 6 } }, text);
     const meta = __spreadProps(__spreadValues({}, F.small), { color: C.muted });
     return h("div", { "data-fthread": t.id, style: { marginBottom: S.x200 } },
-      h("div", { style: __spreadProps(__spreadValues({}, meta), { marginBottom: S.x100 }) }, "\u2191 original question \u00B7 discussed at ", table ? table.name : "the table", " before it reached you"),
+      h("div", { style: __spreadProps(__spreadValues({}, meta), { marginBottom: S.x100 }) }, "\u2191 original question \u00B7 ", later ? ["discussed at ", table ? table.name : "the table", " before it reached you"] : "follow-ups and +1s from the table and the class"),
       h("div", { style: { marginLeft: 2, paddingLeft: S.x150, borderLeft: `2px solid ${line}`, display: "grid", gap: S.x100 } },
         rows.map((e, i) => e.kind === "reply" ? h("div", { key: e.r.id || "r" + i, "data-kind": "follow-up" },
           h("div", { style: meta }, chip("follow-up", C.chip, C.chipInk), nameOf(e.r), e.r.created_at ? " \u00B7 " + relTime(e.r.created_at) : ""),
           h("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.ink, marginTop: 2 }) }, e.r.text)
-        ) : h("div", { key: "p" + i, "data-kind": "plus-one", style: meta }, chip("+1", C.aTable), e.n === 1 ? "1 tablemate had the same question" : `${e.n} tablemates had the same question`)),
-        h("div", { key: "sent", "data-kind": "escalation", style: meta }, chip(later ? "for after class" : "sent to you", line), who, later ? " sent it for after class" : " sent it to you from the table")));
+        ) : h("div", { key: "p" + i, "data-kind": "plus-one", style: meta }, chip("+1", C.aTable), (later ? e.n === 1 ? "1 tablemate" : `${e.n} tablemates` : e.n === 1 ? "1 classmate" : `${e.n} classmates`) + " had the same question")),
+        h("div", { key: "sent", "data-kind": "escalation", style: meta }, chip(later ? "for after class" : "sent to you", line), who, later ? " sent it for after class" : " sent it to you")));
   }
   const Pill = ({ bg, fg, on, disabled, onClick, children }) => /* @__PURE__ */ React.createElement(
     "button",
