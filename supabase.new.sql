@@ -99,8 +99,15 @@ create table if not exists public.thoughts (
              -- captured | ready | taking | spoken | addressed | avoided
              -- Deliberately unconstrained: the frontend has already added one
              -- value ('avoided') since launch and a CHECK would have blocked it.
+             -- Also used: resolved (asker no longer needs it), seen / marked
+             -- (faculty read / flagged to come back to).
+  anonymous  boolean not null default false,
+             -- per question: hide the asker's name from faculty and the table.
+             -- student_id stays set so the asker keeps control of it.
   created_at timestamptz not null default now()
 );
+-- For projects created before the column existed.
+alter table public.thoughts add column if not exists anonymous boolean not null default false;
 
 -- The after-class list, one row per 'later' thought. Keyed on thought_id so
 -- the frontend's upsert is idempotent.
@@ -130,7 +137,7 @@ create table if not exists public.reactions (
   primary key (thought_id, student_id)
 );
 
--- Per-student, per-subtopic clarity signal (thumbs up / thumbs down).
+-- Per-student, per-subtopic understanding: Well = 1, Somewhat = 0, Not well = -1.
 -- subtopic_idx is the position in topics.subtopics; -1 means the topic as a
 -- whole, which is what a topic with no subtopics votes on.
 -- The primary key gives one current vote per student per subtopic, so an
@@ -142,10 +149,12 @@ create table if not exists public.topic_pulse (
   topic_id     uuid        not null references public.topics(id)   on delete cascade,
   subtopic_idx smallint    not null,
   student_id   uuid        not null references public.students(id) on delete cascade,
-  value        smallint    not null check (value in (1, -1)),
+  value        smallint    not null,
   updated_at   timestamptz not null default now(),
   primary key (topic_id, subtopic_idx, student_id)
 );
+alter table public.topic_pulse drop constraint if exists topic_pulse_value_check;
+alter table public.topic_pulse add constraint topic_pulse_value_check check (value in (1, 0, -1));
 
 -- classes.current_topic_id, added once topics exists.
 -- SET NULL is load-bearing: applying a new running order deletes every topic
@@ -233,20 +242,29 @@ to anon, authenticated;
 -- The two RPCs the student's table view calls. Column lists match exactly
 -- what the frontend reads. STABLE, so they are read-only.
 
-create or replace function public.table_feed(p_table_id uuid)
+-- p_viewer: the student asking. An anonymous question (and its asker's own
+-- follow-ups) comes back as 'Anonymous' with a NULL student_id to everyone else.
+drop function if exists public.table_feed(uuid);
+drop function if exists public.table_replies(uuid);
+
+create or replace function public.table_feed(p_table_id uuid, p_viewer uuid default null)
 returns table (
   id uuid, class_id uuid, student_id uuid, table_id uuid, topic_id uuid,
   anchor_id uuid, text text, visibility text, status text,
-  created_at timestamptz, student_name text
+  created_at timestamptz, student_name text, anonymous boolean
 )
 language sql
 stable
 security invoker
 set search_path = public
 as $$
-  select t.id, t.class_id, t.student_id, t.table_id, t.topic_id,
-         t.anchor_id, t.text, t.visibility, t.status, t.created_at,
-         coalesce(s.name, 'Someone')
+  select t.id, t.class_id,
+         case when t.anonymous and t.student_id is distinct from p_viewer
+              then null else t.student_id end,
+         t.table_id, t.topic_id, t.anchor_id, t.text, t.visibility, t.status,
+         t.created_at,
+         case when t.anonymous then 'Anonymous' else coalesce(s.name, 'Someone') end,
+         t.anonymous
   from public.thoughts t
   left join public.students s on s.id = t.student_id
   where t.table_id = p_table_id
@@ -254,7 +272,7 @@ as $$
   order by t.created_at desc
 $$;
 
-create or replace function public.table_replies(p_table_id uuid)
+create or replace function public.table_replies(p_table_id uuid, p_viewer uuid default null)
 returns table (
   id uuid, thought_id uuid, student_id uuid, text text,
   created_at timestamptz, student_name text
@@ -264,8 +282,13 @@ stable
 security invoker
 set search_path = public
 as $$
-  select r.id, r.thought_id, r.student_id, r.text, r.created_at,
-         coalesce(s.name, 'Someone')
+  select r.id, r.thought_id,
+         case when t.anonymous and r.student_id = t.student_id
+                   and r.student_id is distinct from p_viewer
+              then null else r.student_id end,
+         r.text, r.created_at,
+         case when t.anonymous and r.student_id = t.student_id
+              then 'Anonymous' else coalesce(s.name, 'Someone') end
   from public.replies r
   join public.thoughts t on t.id = r.thought_id
   left join public.students s on s.id = r.student_id
@@ -274,8 +297,8 @@ as $$
   order by r.created_at asc
 $$;
 
-grant execute on function public.table_feed(uuid)    to anon, authenticated;
-grant execute on function public.table_replies(uuid) to anon, authenticated;
+grant execute on function public.table_feed(uuid, uuid)    to anon, authenticated;
+grant execute on function public.table_replies(uuid, uuid) to anon, authenticated;
 
 -- ------------------------------------------------- 6. realtime
 -- The eight tables the frontend subscribes to. REPLICA IDENTITY FULL is

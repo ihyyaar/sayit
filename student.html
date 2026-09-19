@@ -32,6 +32,23 @@
   /* Hover, pointer devices only (touch never depends on it): a light tint laid
      over whatever the control's own background is, so filled and transparent
      controls respond alike; underline tabs darken their label instead. */
+  /* Sliding notifications: slide in, sit ~6s, slide out. Never block the page. */
+  @keyframes fl-in-x { from { transform: translateX(32px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes fl-out-x { to { transform: translateX(32px); opacity: 0; } }
+  @keyframes fl-in-y { from { transform: translateY(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes fl-out-y { to { transform: translateY(-24px); opacity: 0; } }
+  .fl-notices { position: fixed; z-index: 50; display: grid; gap: 8px; pointer-events: none; }
+  .fl-notice { pointer-events: auto; animation: var(--fl-in, fl-in-x) 220ms ease-out both; }
+  .fl-notice.fl-leaving { animation: var(--fl-out, fl-out-x) 220ms ease-in both; }
+  @keyframes fl-in-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes fl-out-up { to { transform: translateY(24px); opacity: 0; } }
+  @keyframes fl-count { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+  /* Topic check: beside the class column on wide screens, above the bottom
+     edge on phones. Never covers the composer's top area; never blocks. */
+  .fl-ask-wrap { position: fixed; z-index: 50; left: 12px; right: 12px; bottom: 12px; display: flex; justify-content: center; pointer-events: none; --fl-in: fl-in-up; --fl-out: fl-out-up; }
+  .fl-ask-wrap > * { width: 100%; max-width: 420px; }
+  @media (min-width: 900px) { .fl-ask-wrap { left: auto; bottom: auto; right: 24px; top: 88px; width: 300px; --fl-in: fl-in-x; --fl-out: fl-out-x; } }
+  @media (prefers-reduced-motion: reduce) { .fl-notice, .fl-notice.fl-leaving { animation: none; } .fl-count { animation: none !important; } }
   @media (hover: hover) and (pointer: fine) {
     button:not(:disabled), select:not(:disabled), a[href] { cursor: pointer; }
     button:disabled { cursor: default; }
@@ -657,6 +674,13 @@ try {
     ),
     /* @__PURE__ */ React.createElement("path", { d: "M4.5 6.8H2.6c-.6 0-1.1.5-1.1 1.1v5c0 .6.5 1.1 1.1 1.1h1.9", stroke: color, strokeWidth: "1.5", strokeLinejoin: "round" })
   );
+  // Understanding: Well = 1, Somewhat = 0, Not well = -1 (topic_pulse.value).
+  // 1 and -1 kept their meaning when 0 was added, so older ratings still read
+  // right. One list for the popup, the review and the faculty counts.
+  const PULSE = [[1, "Well"], [0, "Somewhat"], [-1, "Not well"]];
+  // How long the in-class topic check stays up if nobody answers.
+  const PULSE_ASK_MS = 10e3;
+  const PulseIcon = ({ v, color }) => v === 0 ? /* @__PURE__ */ React.createElement("svg", { width: "16", height: "16", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", style: { display: "block" } }, /* @__PURE__ */ React.createElement("circle", { cx: "8", cy: "8", r: "6.2", stroke: color, strokeWidth: "1.4" }), /* @__PURE__ */ React.createElement("circle", { cx: "5.9", cy: "6.6", r: "0.9", fill: color }), /* @__PURE__ */ React.createElement("circle", { cx: "10.1", cy: "6.6", r: "0.9", fill: color }), /* @__PURE__ */ React.createElement("path", { d: "M5.4 10.3h5.2", stroke: color, strokeWidth: "1.4", strokeLinecap: "round" })) : /* @__PURE__ */ React.createElement(ThumbIcon, { down: v === -1, color });
   const Card = ({ children, style }) => /* @__PURE__ */ React.createElement("div", { style: __spreadValues({ background: C.surface, border: `1px solid ${C.line}`, borderRadius: R.lg }, style) }, children);
   const Well = ({ children, style }) => /* @__PURE__ */ React.createElement("div", { style: __spreadValues({ background: C.sunken, border: `1px solid ${C.line}`, borderRadius: R.xl }, style) }, children);
   const Spin = ({ color = C.muted, size = 14 }) => /* @__PURE__ */ React.createElement("span", { className: "spinner", style: {
@@ -689,6 +713,30 @@ try {
     maxWidth: 420,
     boxShadow: "0 8px 12px #1E1F2126, 0 0 1px #1E1F214F"
   }) }, message.bad ? /* @__PURE__ */ React.createElement("b", { style: { display: "block", marginBottom: S.x025 } }, "Didn't send") : null, message.text || message));
+  // In-app notifications that slide in, stay about six seconds, then slide
+  // out. They sit above the page without blocking it, and each can be
+  // dismissed early. `kind` picks the stripe: "now" (say now, green),
+  // "table" (shared with the table, yellow).
+  function useNotices(ms = 6e3) {
+    const [items, setItems] = useState([]);
+    const dismiss = (id) => {
+      setItems((xs) => xs.map((x) => x.id === id ? __spreadProps(__spreadValues({}, x), { leaving: true }) : x));
+      setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 220);
+    };
+    const push = (n) => {
+      setItems((xs) => xs.some((x) => x.id === n.id) ? xs : [...xs, n].slice(-3));
+      setTimeout(() => dismiss(n.id), ms);
+    };
+    return { items, push, dismiss };
+  }
+  const Notices = ({ items, onDismiss, place }) => items.length === 0 ? null : /* @__PURE__ */ React.createElement("div", { className: "fl-notices", role: "status", "aria-live": "polite", style: place }, items.map((n) => /* @__PURE__ */ React.createElement("div", { key: n.id, className: "fl-notice" + (n.leaving ? " fl-leaving" : ""), "data-notice": n.kind, style: { display: "flex", width: "100%", background: C.surface, border: `1px solid ${C.flCard}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 6px 18px rgba(0,0,0,.14)" } },
+    /* @__PURE__ */ React.createElement("div", { style: { width: 8, flexShrink: 0, background: n.kind === "now" ? C.aNow : C.aTable } }),
+    /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, padding: "10px 12px" } },
+      /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+        /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, lineHeight: "16px", fontWeight: 700, color: C.aInk, background: n.kind === "now" ? C.aNow : C.aTable, borderRadius: 999, padding: "1px 8px", flexShrink: 0 } }, n.kind === "now" ? "say now" : "table"),
+        /* @__PURE__ */ React.createElement("span", { style: { flex: 1, minWidth: 0, fontSize: 14, lineHeight: "20px", fontWeight: 600, color: C.ink } }, n.title),
+        /* @__PURE__ */ React.createElement("button", { className: "focusable", "aria-label": "Dismiss", title: "Dismiss", onClick: () => onDismiss(n.id), style: { border: "none", background: "transparent", color: C.muted, width: 24, height: 24, borderRadius: 6, fontSize: 16, lineHeight: "20px", padding: 0, flexShrink: 0 } }, "\xD7")),
+      n.body && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 4, fontSize: 13, lineHeight: "18px", color: C.body, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } }, n.body)))));
   const Banner = ({ tone, title, children }) => {
     const map = { bad: { bg: C.dangerSub, fg: C.danger, icon: "!" }, info: { bg: C.nowSub, fg: C.now, icon: "i" } };
     const t = map[tone === "bad" ? "bad" : "info"];
@@ -958,6 +1006,10 @@ try {
     "relate"
   ]);
   const isVerb = (w) => isSForm(w) || BASE_VERBS.has(w.toLowerCase());
+  // third person singular: happen -> happens, apply -> applies, go -> goes
+  const toS = (v) => v === "have" ? "has" : v === "be" ? "is" : /[^aeiou]y$/.test(v) ? v.slice(0, -1) + "ies" : /(s|sh|ch|x|z|o)$/.test(v) ? v + "es" : v + "s";
+  const FILLER = /* @__PURE__ */ new Set(["even", "actually", "really", "just", "exactly", "like"]);
+  const norm = (x) => x.toLowerCase().replace(/[^a-z0-9' ]/g, " ").replace(/\s+/g, " ").trim();
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   const low = (s) => s.charAt(0).toLowerCase() + s.slice(1);
   const join = (a) => a.join(" ").replace(/\s+/g, " ").trim();
@@ -968,11 +1020,30 @@ try {
     const tok = t.split(/\s+/);
     const first = tok[0].toLowerCase();
     let direct = null, polite = null;
-    if (WH.has(first)) {
+    if (first === "what" && tok.length > 2 && tok[1].toLowerCase() === "if") {
+      const rest = join(tok.slice(2));
+      direct = q("What happens if " + rest);
+      polite = q("Could you explain what happens if " + rest);
+    } else if (WH.has(first)) {
       const wh = first, rest = tok.slice(1);
       const ai = rest.findIndex((w) => AUX.has(w.toLowerCase()) || DO.has(w.toLowerCase()));
-      if (ai === 0) {
-        direct = q(cap(t));
+      const aux0 = ai === 0 ? rest[0].toLowerCase() : "";
+      const after = ai === 0 ? rest.slice(1).filter((w) => !FILLER.has(w.toLowerCase())) : [];
+      const bv = after.findIndex((w, i) => i > 0 && BASE_VERBS.has(w.toLowerCase()));
+      const vi0 = bv > 0 ? bv : after.length === 2 ? 1 : -1;
+      if (ai === 0 && DO.has(aux0) && vi0 > 0) {
+        // "why does this happen" -> "What makes this happen?" /
+        // "Could you explain why this happens?"
+        const subj = join(after.slice(0, vi0)), verb = after[vi0].toLowerCase(), tail = join(after.slice(vi0 + 1));
+        const embedded = join([subj, aux0 === "do" || aux0 === "did" ? verb : toS(verb), tail]);
+        direct = wh === "why" ? q(join(["What makes", subj, verb, tail])) : wh === "how" ? q("Could you walk me through how " + embedded) : q(cap(join([wh, aux0, subj, verb, tail])));
+        polite = q("Could you explain " + join([wh, embedded]));
+      } else if (ai === 0 && wh === "what" && (aux0 === "is" || aux0 === "are") && after.length) {
+        // "what is ability" -> "What does ability mean?" / "Could you explain what ability is?"
+        direct = q(join([aux0 === "are" ? "What do" : "What does", join(after), "mean"]));
+        polite = q("Could you explain what " + join([join(after), aux0]));
+      } else if (ai === 0) {
+        direct = q("Just to check, " + low(t));
         polite = q("Can I ask, " + low(t));
       } else if (ai > 0) {
         const subj = rest.slice(0, ai), aux = rest[ai].toLowerCase(), tail = rest.slice(ai + 1);
@@ -984,14 +1055,14 @@ try {
           const subj = rest.slice(0, vi), verb = rest[vi], tail = rest.slice(vi + 1);
           const plural = PRON_PL.has(subj[subj.length - 1].toLowerCase());
           direct = q(cap(join([wh, plural ? "do" : "does", join(subj), toBase(verb), join(tail)])));
-          polite = q("Could you explain " + join([wh, join(subj), verb, join(tail)]));
+          polite = q("Could you explain " + join([wh, join(subj), plural ? toBase(verb) : toS(toBase(verb)), join(tail)]));
         } else {
           direct = q(cap(t));
           polite = q("Could you explain " + low(t));
         }
       }
     } else if (AUX.has(first) || DO.has(first)) {
-      direct = q(cap(t));
+      direct = q("Just to check, " + low(t));
       polite = q("Can I ask, " + low(t));
     } else {
       const vi = tok.findIndex((w, i) => i > 0 && (isVerb(w) || AUX.has(w.toLowerCase())));
@@ -1011,13 +1082,15 @@ try {
         polite = q("What do you mean by " + low(t));
       }
     }
-    const seen = /* @__PURE__ */ new Set();
-    return [direct, polite].filter((o) => {
-      const k = o.toLowerCase().replace(/[?.!]+$/, "");
+    // Never offer the student's own words back as a "rephrasing".
+    const seen = /* @__PURE__ */ new Set([norm(t)]);
+    const out = [direct, polite].filter((o) => {
+      const k = norm(o);
       if (seen.has(k)) return false;
       seen.add(k);
       return true;
     });
+    return out.length ? out : [q("Can I ask, " + low(t))];
   }
   const STOP = new Set("a an and are as at be but by can could do does for from get has have how i if in is it its me my not of on or our so than that this to was we what when where which who why will with would you your about into more some just like really actually".split(" "));
   const words = (s) => String(s || "").toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter((w) => w.length > 3 && !STOP.has(w));
@@ -1187,7 +1260,10 @@ try {
         if (error) throw error;
         return data;
       },
-      async send({ classId, studentId, tableId, topicId, anchorId, text, visibility }) {
+      // anonymous hides the asker's name from the faculty and the table. It is
+      // per question and only ever sent when true, so a database without the
+      // column still takes ordinary questions.
+      async send({ classId, studentId, tableId, topicId, anchorId, text, visibility, anonymous }) {
         if (solo) {
           const d = soloRead();
           const t = {
@@ -1200,6 +1276,7 @@ try {
             text,
             visibility,
             status: visibility === "now" ? "ready" : "captured",
+            anonymous: !!anonymous,
             created_at: (/* @__PURE__ */ new Date()).toISOString(),
             replies: [],
             reactions: []
@@ -1209,7 +1286,7 @@ try {
           soloWrite(d);
           return t;
         }
-        const { data, error } = await sb.from("thoughts").insert({
+        const { data, error } = await sb.from("thoughts").insert(__spreadValues({
           class_id: classId,
           student_id: studentId,
           table_id: tableId,
@@ -1218,7 +1295,7 @@ try {
           text,
           visibility,
           status: visibility === "now" ? "ready" : "captured"
-        }).select().single();
+        }, anonymous ? { anonymous: true } : {})).select().single();
         if (error) throw error;
         if (visibility === "later") await sb.from("queue").insert({ thought_id: data.id, class_id: classId, status: "pending" });
         return data;
@@ -1340,17 +1417,23 @@ try {
         const { error } = await sb.from("queue").update(patch).eq("thought_id", thoughtId);
         if (error) throw error;
       },
-      async tableFeed(tableId) {
+      // viewer: the student asking. The RPCs name the asker of an anonymous
+      // question (and their own follow-ups on it) only to that asker.
+      async tableFeed(tableId, viewer) {
         if (solo) {
           const d = soloRead();
           return d.thoughts.filter((t) => t.visibility === "table" && t.table_id === tableId).map((t) => __spreadProps(__spreadValues({}, t), {
-            student_name: (d.students.find((s) => s.id === t.student_id) || {}).name || "Someone",
+            student_id: t.anonymous && t.student_id !== viewer ? null : t.student_id,
+            student_name: t.anonymous ? "Anonymous" : (d.students.find((s) => s.id === t.student_id) || {}).name || "Someone",
             replies: t.replies || [],
             reaction_count: (t.reactions || []).length,
             reacted_by: t.reactions || []
           }));
         }
-        const [f, r] = await Promise.all([sb.rpc("table_feed", { p_table_id: tableId }), sb.rpc("table_replies", { p_table_id: tableId })]);
+        let [f, r] = await Promise.all([sb.rpc("table_feed", { p_table_id: tableId, p_viewer: viewer || null }), sb.rpc("table_replies", { p_table_id: tableId, p_viewer: viewer || null })]);
+        // Before the anonymous-questions migration the RPCs take one argument
+        // (and nothing is anonymous yet), so fall back to that.
+        if (f.error && f.error.code === "PGRST202" || r.error && r.error.code === "PGRST202") [f, r] = await Promise.all([sb.rpc("table_feed", { p_table_id: tableId }), sb.rpc("table_replies", { p_table_id: tableId })]);
         if (f.error) throw f.error;
         if (r.error) throw r.error;
         const by = {};
@@ -1524,7 +1607,7 @@ try {
           h(Chip, { on: true, color: C.aNow, disabled: busy || !draft.trim() || draft.trim() === t.text, onClick: async () => { if (await onEdit(t, draft.trim()) !== false) setEditing(false); } }, "save"),
           h(Chip, { onClick: () => { setDraft(t.text); setEditing(false); } }, "cancel"))) : h("div", { style: { fontSize: 14, lineHeight: "20px", color: done ? C.muted : C.ink, textDecoration: done ? "line-through" : "none", paddingRight: mine ? 52 : 0 } }, t.text),
       h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted, marginTop: 4, display: "flex", gap: 4, flexWrap: "wrap" } },
-        h("span", null, mine ? "You" : t.student_name || "Someone"), h("span", null, "\xB7"), h("span", null, relTime(t.created_at)),
+        h("span", null, mine ? "You" : t.student_name || "Someone"), mine && t.anonymous && h("span", { "data-anon": "1", style: { fontWeight: 600, color: C.chipInk, background: C.chip, borderRadius: 999, padding: "0 6px" } }, "anonymous"), h("span", null, "\xB7"), h("span", null, relTime(t.created_at)),
         setAside && h("span", null, "\xB7 set aside for now"), resolvedByMe && h("span", null, "\xB7 no longer needed")),
       tools, chips, thread,
       called && h("div", { style: { marginTop: S.x150, background: C.aNow, borderRadius: R.lg, padding: S.x150 } }, h("div", { style: { fontSize: 14, fontWeight: 700, color: C.aInk, marginBottom: S.x100 } }, "The floor is yours"), h(Chip, { on: true, color: "#FFFFFF", onClick: () => onMove(t, "__spoken") }, "I said it")),
@@ -1565,6 +1648,25 @@ try {
     const [wording, setWording] = useState(false);
     const [original, setOriginal] = useState(null);
     const [feed, setFeed] = useState([]);
+    // Per question, and always back to "on" after a send.
+    const [showName, setShowName] = useState(true);
+    // Topic check (during class): asked once when the current topic moves on.
+    const [topicCheck, setTopicCheck] = useState(null);
+    const lastTopic = useRef(void 0);
+    const askedFor = useRef(/* @__PURE__ */ new Set());
+    // "A question was shared with your table": slides in for tablemates when
+    // a question they haven't seen appears in the table feed (not their own).
+    // No name is shown. The first load only records what is already there.
+    const notices = useNotices();
+    const feedSeen = useRef(null);
+    useEffect(() => {
+      if (!feedSeen.current) return;
+      feed.forEach((t) => {
+        if (feedSeen.current.has(t.id)) return;
+        feedSeen.current.add(t.id);
+        if (t.student_id !== me.id) notices.push({ id: "table:" + t.id, kind: "table", title: "A question was shared with your table", body: t.text });
+      });
+    }, [feed]);
     const [toast, setToast] = useState(null);
     const [sending, setSending] = useState(false);
     const [rt, setRt] = useState(null);
@@ -1611,8 +1713,10 @@ try {
     useEffect(() => {
       if (!me.table_id) return;
       let alive = true;
-      const pull = () => store.tableFeed(me.table_id).then((f) => {
-        if (alive) setFeed(f);
+      const pull = () => store.tableFeed(me.table_id, me.id).then((f) => {
+        if (!alive) return;
+        if (!feedSeen.current) feedSeen.current = new Set(f.map((t) => t.id));
+        setFeed(f);
       }).catch(() => {
       });
       pullFeed.current = pull;
@@ -1655,6 +1759,41 @@ try {
       () => !state || dismissed ? [] : suggestAnchors(state.anchors, state.materials, text, state.klass.current_topic_id),
       [state, text, dismissed]
     );
+    // Topic check: when the faculty moves the current topic on during a live
+    // session, ask once about the topic that just finished. Not on first load
+    // or reload (the first topic seen is only recorded), not twice for the
+    // same topic, and not if this student already rated that topic overall.
+    useEffect(() => {
+      if (!state) return;
+      const cur = state.klass.current_topic_id || null;
+      if (lastTopic.current === void 0) {
+        lastTopic.current = cur;
+        return;
+      }
+      if (cur === lastTopic.current) return;
+      const prev = lastTopic.current;
+      lastTopic.current = cur;
+      if (state.klass.status !== "live" || !prev || askedFor.current.has(prev)) return;
+      const tp = state.topics.find((t) => t.id === prev);
+      if (!tp || myVote(-1, prev) !== void 0) return;
+      askedFor.current.add(prev);
+      setTopicCheck({ topic: tp, leaving: false });
+    });
+    const closeAsk = () => {
+      setTopicCheck((a) => a && !a.leaving ? __spreadProps(__spreadValues({}, a), { leaving: true }) : a);
+      setTimeout(() => setTopicCheck((a) => a && a.leaving ? null : a), 220);
+    };
+    useEffect(() => {
+      if (!topicCheck || topicCheck.leaving) return;
+      const id = setTimeout(closeAsk, PULSE_ASK_MS);
+      return () => clearTimeout(id);
+    }, [topicCheck && topicCheck.topic.id, topicCheck && topicCheck.leaving]);
+    async function answerAsk(v) {
+      const a = topicCheck;
+      if (!a || a.leaving) return;
+      closeAsk();
+      if (myVote(-1, a.topic.id) !== v) await setPulse(-1, v, a.topic.id, true);
+    }
     if (!state && loadErr) return React.createElement("div", { style: { padding: "14vh 16px 32px", background: C.surface, minHeight: "100%" } }, React.createElement(Logo, { height: 24 }), React.createElement("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: 16, marginTop: 28 } }, React.createElement("div", { style: { fontSize: 18, lineHeight: "24px", fontWeight: 800, letterSpacing: -0.4, color: C.flInk, marginBottom: 6 } }, "can't open this class"), React.createElement("div", { style: { fontSize: 14, lineHeight: "20px", color: C.body, marginBottom: 16 } }, loadErr), React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } }, [["try again", () => refresh()], ["profile", onProfile], ["reset this device", resetDevice]].map(([l, fn]) => React.createElement("button", { key: l, className: "focusable", onClick: fn, style: { border: "none", borderRadius: 9, background: C.flGrey, color: C.flGreyInk, padding: "9px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" } }, l)))));
     if (!state) return /* @__PURE__ */ React.createElement("div", { style: { padding: "20vh 16px", textAlign: "center", color: C.muted, fontSize: 14, background: C.surface, minHeight: "100%" } }, /* @__PURE__ */ React.createElement(Spin, null), " loading");
     const topics = state.topics;
@@ -1667,11 +1806,21 @@ try {
     const chosen = anchorId ? state.anchors.find((a) => a.id === anchorId) : suggestions[0] || null;
     const ready = text.trim().length > 0;
     const shown = options || [];
+    // Rephrase puts the first alternative straight into the box, where it can
+    // be edited; nothing is sent. The other alternative stays one tap away and
+    // "put my own words back" restores exactly what the student wrote.
+    function applyOptions(o) {
+      setOptions(o.length ? o : null);
+      if (o.length) {
+        setOriginal(original || text);
+        setText(o[0]);
+      }
+    }
     function doWording() {
       setWordErr(null);
       if (!aiReady()) {
         const out = localReframe(text);
-        setOptions(out.length ? out : null);
+        applyOptions(out);
         setUsedAI(false);
         if (!out.length) setWordErr("Nothing to reword there.");
         return;
@@ -1679,10 +1828,10 @@ try {
       setWording(true);
       reframe(text.trim()).then((o) => {
         if (!o.length) throw new Error("empty");
-        setOptions(o);
+        applyOptions(o);
         setUsedAI(true);
       }).catch(() => {
-        setOptions(localReframe(text));
+        applyOptions(localReframe(text));
         setUsedAI(false);
         setWordErr("Couldn't reach the model, so these are worked out on the device.");
       }).finally(() => setWording(false));
@@ -1697,7 +1846,8 @@ try {
           topicId: chosen ? chosen.topic_id : state.klass.current_topic_id,
           anchorId: chosen ? chosen.id : null,
           text: text.trim(),
-          visibility: action
+          visibility: action,
+          anonymous: !showName
         });
         await refresh();
         setText("");
@@ -1707,7 +1857,8 @@ try {
         setOriginal(null);
         if (action === "table") setPane("table");
         else setPane("mine");
-        setToast(action === "now" ? "The teacher knows. You still say it." : action === "later" ? "Saved for the end." : "Shared with your table.");
+        setToast((showName ? "" : "Sent without your name. ") + (action === "now" ? "The teacher knows. You still say it." : action === "later" ? "Saved for the end." : "Shared with your table."));
+        setShowName(true);
       } catch (e) {
         setToast({ bad: true, text: "Still in the box. " + (e.message || "") });
       } finally {
@@ -1749,7 +1900,7 @@ try {
       try {
         await store.reply(th.id, me.id, body);
         await refresh();
-        if (me.table_id) setFeed(await store.tableFeed(me.table_id));
+        if (me.table_id) setFeed(await store.tableFeed(me.table_id, me.id));
         return true;
       } catch (e) {
         setToast({ bad: true, text: "Couldn't add that follow-up." });
@@ -1773,7 +1924,7 @@ try {
       try {
         await store.status(t.id, t.status === "resolved" ? back : "resolved");
         await refresh();
-        if (me.table_id) setFeed(await store.tableFeed(me.table_id));
+        if (me.table_id) setFeed(await store.tableFeed(me.table_id, me.id));
       } catch (e) {
         setToast({ bad: true, text: "Couldn't update that." });
       }
@@ -1783,7 +1934,7 @@ try {
       try {
         await store.editText(t.id, body);
         await refresh();
-        if (me.table_id) setFeed(await store.tableFeed(me.table_id));
+        if (me.table_id) setFeed(await store.tableFeed(me.table_id, me.id));
         return true;
       } catch (e) {
         setToast({ bad: true, text: "Couldn't save that edit." });
@@ -1805,8 +1956,9 @@ try {
     };
     // Topic feedback is post-class only: nothing is written while the session
     // is live (or not yet started), even if a stale control were tapped.
-    async function setPulse(idx, v, topicId = current && current.id) {
-      if (!topicId || state.klass.status !== "ended") return;
+    // (The one in-class exception is the topic check, which passes live.)
+    async function setPulse(idx, v, topicId = current && current.id, live = false) {
+      if (!topicId || state.klass.status !== "ended" && !(live && state.klass.status === "live")) return;
       try {
         await store.setPulse(state.klass.id, topicId, idx, me.id, v);
         await refresh();
@@ -1816,8 +1968,8 @@ try {
       setTick((n) => n + 1);
     }
     const h = React.createElement;
-    // 👍 / 👎 pair, used only by the post-class review rows.
-    const thumbs = ({ idx, size, topicId, light }) => h("div", { style: { display: "flex", gap: 4, flexShrink: 0 } }, [[1, "Following this"], [-1, "Lost me"]].map(([v, label]) => {
+    // Well / Somewhat / Not well, on the post-class review rows.
+    const thumbs = ({ idx, size, topicId, light }) => h("div", { style: { display: "flex", gap: 4, flexShrink: 0 } }, PULSE.map(([v, label]) => {
       const tid = topicId || current && current.id;
       const on = myVote(idx, tid) === v;
       return h("button", { key: v, className: "focusable", title: label, "aria-label": label, "aria-pressed": on, onClick: () => setPulse(idx, v, tid), style: {
@@ -1832,7 +1984,7 @@ try {
         border: `1px solid ${on ? "transparent" : light ? C.flField : "rgba(14,23,28,.28)"}`,
         background: on ? light ? C.flInk : C.tCurInk : light ? C.surface : "transparent",
         transition: `background-color 150ms ${EASE}`
-      } }, h(ThumbIcon, { down: v === -1, color: on ? light ? C.surface : "#FFFFFF" : light ? C.body : C.tCurInk }));
+      } }, h(PulseIcon, { v, color: on ? light ? C.surface : "#FFFFFF" : light ? C.body : C.tCurInk }));
     }));
     // A boxed section: "class outline", "ask". Thin line, barely rounded.
     // A plain function, not a component: a component defined in here would be a
@@ -1871,7 +2023,9 @@ try {
     const reviewList = reviewing ? [
       h("div", { key: "prompt", style: { position: "sticky", top: 0, zIndex: 1, background: C.surface, paddingBottom: S.x100, borderBottom: `1px solid ${C.flBox}` } }, h("div", { style: { fontSize: 13, lineHeight: "18px", color: unrated ? C.now : C.muted, fontWeight: unrated ? 600 : 400 } }, unrated ? `${unrated} of ${toRate.length} still to rate. You can change any answer.` : "All rated. You can still change any answer."))
     ].concat(covered.flatMap((tp) => (tp.subtopics || []).length ? [
-      h("div", { key: tp.id + ":h", style: { fontSize: 15, lineHeight: "21px", fontWeight: 600, color: C.ink, padding: "8px 2px 0" } }, `Topic ${tp.ord} \xB7 ${tp.title}`)
+      // The topic as a whole (what the in-class topic check asks) sits on its
+      // heading; optional, so it doesn't count towards "still to rate".
+      h("div", { key: tp.id + ":h", style: { display: "flex", alignItems: "center", gap: S.x150, padding: "8px 12px 0 2px" } }, h("div", { style: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: "21px", fontWeight: 600, color: C.ink } }, `Topic ${tp.ord} \xB7 ${tp.title}`, h("div", { style: { fontSize: 12, lineHeight: "16px", fontWeight: 400, color: C.muted } }, "overall, then each part")), thumbs({ idx: -1, topicId: tp.id, size: 34, light: true }))
     ].concat(tp.subtopics.map((s, i) => rateRow({ tp, i, label: s }))) : [rateRow({ tp, i: -1, label: `Topic ${tp.ord} \xB7 ${tp.title}` })])) : null;
     // The current topic: the blue pill, with its subtopics and 👍/👎 inside.
     const curPill = current && h("div", { ref: curRef, style: pill("cur") },
@@ -1890,8 +2044,9 @@ try {
     const reviewBlock = reviewing && h("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: `${S.x250}px ${S.x200}px`, background: C.surface } },
       h("div", { style: { fontSize: 28, lineHeight: "34px", fontWeight: 800, letterSpacing: -0.9, color: C.flInk } }, "class is over"),
       h("div", { style: { fontSize: 17, lineHeight: "24px", color: C.ink, marginTop: S.x050 } }, "rate what this class covered"),
-      h("div", { style: { fontSize: 13, lineHeight: "19px", color: C.muted, marginTop: 2, marginBottom: S.x200 } }, "A quick thumbs up or down on each part shows you what to go back over."),
-      h("div", { "data-outline": "1", style: { display: "grid", gap: S.x100 } }, reviewList));
+      h("div", { style: { fontSize: 13, lineHeight: "19px", color: C.muted, marginTop: 2, marginBottom: S.x200 } }, "Rate each part: it shows you what to go back over. Tap your answer again to clear it."),
+      h("div", { "data-legend": "1", style: { display: "flex", gap: S.x200, flexWrap: "wrap", fontSize: 12, lineHeight: "16px", color: C.body, marginBottom: S.x150 } }, PULSE.map(([v, label]) => h("span", { key: v, style: { display: "inline-flex", alignItems: "center", gap: 4 } }, h(PulseIcon, { v, color: C.body }), label))),
+      h("div", { "data-outline": "1", style: { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: S.x100 } }, reviewList));
     const box = (extra) => __spreadValues({ border: `1px solid ${C.flField}`, borderRadius: 12, padding: "8px 12px", fontSize: 13, lineHeight: "18px", textAlign: "left", background: C.surface, color: C.ink }, extra);
     const ask = section("ask",
       h("textarea", { ref: boxRef, className: "focusable fl-scroll", value: text, onChange: (e) => {
@@ -1933,11 +2088,16 @@ try {
               setText(original);
               setOriginal(null);
             }, style: { border: "none", background: "transparent", padding: 0, fontSize: 11, color: C.ink, textDecoration: "underline", cursor: "pointer" } }, "put my own words back")))),
-      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: S.x200 } }, [["table", "share with table", C.aTable], ["now", "send now", C.aNow], ["later", "ask later", C.aLater]].map(([k, lab, bg]) => h("button", { key: k, className: "focusable", disabled: !ready || sending, onClick: () => send(k), style: { border: "none", borderRadius: 10, background: bg, color: C.aInk, padding: "11px 4px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", cursor: ready && !sending ? "pointer" : "default", opacity: ready ? 1 : 0.55 } }, lab))))));
+      h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginTop: S.x150, fontSize: 12, lineHeight: "16px", color: C.ink } },
+        h("button", { className: "focusable", role: "switch", "aria-checked": showName, "aria-label": "Show my name", "data-show-name": showName ? "on" : "off", onClick: () => setShowName(!showName), style: { width: 36, height: 20, flexShrink: 0, borderRadius: 999, border: "none", padding: 2, background: showName ? C.aNow : C.flField, display: "flex", justifyContent: showName ? "flex-end" : "flex-start", cursor: "pointer" } },
+          h("span", { style: { width: 16, height: 16, borderRadius: 999, background: "#FFFFFF", display: "block" } })),
+        h("span", { style: { fontWeight: 600 } }, "Show my name"),
+        h("span", { style: { color: showName ? C.muted : C.ink, fontWeight: showName ? 400 : 600 } }, showName ? "on" : "off \xB7 sent as Anonymous")),
+      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: S.x150 } }, [["table", "share with table", C.aTable], ["now", "send now", C.aNow], ["later", "ask later", C.aLater]].map(([k, lab, bg]) => h("button", { key: k, className: "focusable", disabled: !ready || sending, onClick: () => send(k), style: { border: "none", borderRadius: 10, background: bg, color: C.aInk, padding: "11px 4px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", cursor: ready && !sending ? "pointer" : "default", opacity: ready ? 1 : 0.55 } }, lab))))));
     const empty = (title, body) => h("div", { style: { padding: `${S.x400 || 32}px ${S.x200}px`, textAlign: "center" } }, h("div", { style: { fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 4 } }, title), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.muted } }, body));
     const card = (t, extra) => h(QuestionCard, __spreadValues({ key: t.id, t, anchors: state.anchors, topics: state.topics, me, busy: sending, mine: t.student_id === me.id, onMove: move, onRecall: recall, onDelete: del, onReply: addReply, onReact: async (th, on) => {
       await store.react(th.id, me.id, on);
-      setFeed(await store.tableFeed(me.table_id));
+      setFeed(await store.tableFeed(me.table_id, me.id));
     }, onResolve: resolveMine, onEdit: editMine }, extra));
     const paneBody = pane === "table" ? h("div", null,
       mates.length > 0 && h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: S.x150 } }, mates.map((s) => h("span", { key: s.id, style: { fontSize: 11, lineHeight: "16px", fontWeight: s.id === me.id ? 600 : 400, color: C.chipInk, background: C.chip, borderRadius: R.full, padding: "2px 9px" } }, s.id === me.id ? "You" : s.name))),
@@ -1963,6 +2123,17 @@ try {
       h("div", { className: "fl-scroll", style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: `0 ${S.x150}px ${S.x150}px`, gap: S.x150, overflowY: "auto" } },
         loadErr && h(Banner, { tone: "bad", title: "Can't reach the class" }, loadErr),
         !reviewing && outline, !reviewing && ask, !reviewing && list, reviewBlock),
+      topicCheck && state.klass.status === "live" && h("div", { className: "fl-ask-wrap" }, h("div", { className: "fl-notice" + (topicCheck.leaving ? " fl-leaving" : ""), "data-pulse-ask": topicCheck.topic.id, role: "dialog", "aria-label": "How well did you understand the topic?", style: { pointerEvents: "auto", display: "flex", background: C.surface, border: `1px solid ${C.flCard}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 6px 18px rgba(0,0,0,.14)" } },
+        h("div", { style: { width: 8, flexShrink: 0, background: C.tCur } }),
+        h("div", { style: { flex: 1, minWidth: 0, padding: "10px 12px 0" } },
+          h("div", { style: { display: "flex", alignItems: "flex-start", gap: 8 } },
+            h("div", { style: { flex: 1, minWidth: 0 } },
+              h("div", { style: { fontSize: 14, lineHeight: "20px", fontWeight: 600, color: C.ink } }, "How well did you understand the topic?"),
+              h("div", { style: { fontSize: 12, lineHeight: "16px", color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, `Topic ${topicCheck.topic.ord} \xB7 ${topicCheck.topic.title}`)),
+            h("button", { className: "focusable", "aria-label": "Not now", title: "Not now", onClick: closeAsk, style: { border: "none", background: "transparent", color: C.muted, width: 24, height: 24, borderRadius: 6, fontSize: 16, padding: 0, flexShrink: 0 } }, "\xD7")),
+          h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, margin: "10px 0" } }, PULSE.map(([v, label]) => h("button", { key: v, className: "focusable", "aria-label": label, onClick: () => answerAsk(v), style: { border: "none", borderRadius: 8, background: C.flGrey, color: C.flGreyInk, padding: "8px 4px", fontSize: 12, fontWeight: 600, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 } }, h(PulseIcon, { v, color: C.flGreyInk }), label))),
+          h("div", { style: { height: 3, margin: "0 -12px", background: C.flBox } }, h("div", { className: "fl-count", style: { height: 3, background: C.tCur, transformOrigin: "left", animation: `fl-count ${PULSE_ASK_MS}ms linear both` } }))))),
+      h(Notices, { items: notices.items, onDismiss: notices.dismiss, place: { top: 12, left: 12, right: 12, maxWidth: 420, margin: "0 auto", "--fl-in": "fl-in-y", "--fl-out": "fl-out-y" } }),
       h(Toast, { message: toast }));
   }
   // Entry-screen pieces, following the "welcome to floorum" design.
