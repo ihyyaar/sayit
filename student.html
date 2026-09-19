@@ -35,13 +35,20 @@
   @media (hover: hover) and (pointer: fine) {
     button:not(:disabled), select:not(:disabled), a[href] { cursor: pointer; }
     button:disabled { cursor: default; }
-    button, a[href] { transition: box-shadow 120ms ease, border-color 120ms ease, color 120ms ease; }
-    button:not(:disabled):hover, a[href]:hover { box-shadow: inset 0 0 0 999px var(--fl-hover, rgba(0,0,0,.05)); }
-    [role="tab"]:not(:disabled):hover { box-shadow: none; }
-    [role="tab"][aria-selected="false"]:hover { color: var(--fl-ink, #000) !important; border-bottom-color: var(--fl-hover-line, #ACACAC) !important; }
-    .fl-cardbtn:not(:disabled):hover { border-color: var(--fl-hover-line, #ACACAC) !important; }
-    .fl-cardbtn.fl-on:hover { border-color: var(--fl-ink, #000) !important; }
-    .fl-q:hover .fl-own { border-color: var(--fl-hover-line, #ACACAC) !important; }
+    button, a[href] { transition: box-shadow 120ms ease, border-color 120ms ease, color 120ms ease, filter 120ms ease; }
+    /* buttons and icon buttons: a clearly darker fill plus a firm inner edge;
+       drawn inside the box, so the hit area and layout never change */
+    button:not(:disabled):hover, a[href]:hover { box-shadow: inset 0 0 0 1.5px var(--fl-hover-ring, rgba(0,0,0,.55)), inset 0 0 0 999px var(--fl-hover, rgba(0,0,0,.1)); }
+    /* text-style buttons: full ink and a heavy underline instead of a box */
+    .fl-link:not(:disabled):hover { box-shadow: none; color: var(--fl-ink, #000) !important; text-decoration: underline !important; text-decoration-thickness: 2px !important; text-underline-offset: 3px; }
+    /* underline tabs: tint + dark grey underline; the selected tab keeps its blue */
+    [role="tab"]:not(:disabled):hover { box-shadow: inset 0 0 0 999px var(--fl-hover, rgba(0,0,0,.1)); }
+    [role="tab"][aria-selected="false"]:hover { color: var(--fl-ink, #000) !important; border-bottom-color: var(--fl-hover-line, #6B6E76) !important; }
+    /* card-shaped buttons: a dark 2px edge and a darker header block */
+    .fl-cardbtn:not(:disabled):hover { box-shadow: 0 0 0 1px var(--fl-ink, #000); border-color: var(--fl-ink, #000) !important; }
+    .fl-cardbtn:not(:disabled):hover > div:first-child { filter: var(--fl-hover-filter, brightness(.88)); }
+    /* your own question cards (edit / delete / circle): the card edge darkens */
+    .fl-q:hover .fl-own { border-color: var(--fl-ink, #000) !important; box-shadow: 0 0 0 1px var(--fl-ink, #000); }
   }
   #boot { max-width: 520px; margin: 60px auto; padding: 24px; background: #fff;
     border: 1px solid #DDDEE1; border-radius: 12px; line-height: 1.6; color: #505258; font-size: 14px; }
@@ -575,9 +582,11 @@ try {
     Object.assign(C, mode === "dark" ? DARK : LIGHT);
     document.body.style.background = C.paper;
     document.documentElement.style.setProperty("--fl-scroll", C.flScroll);
-    document.documentElement.style.setProperty("--fl-hover", mode === "dark" ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.05)");
-    document.documentElement.style.setProperty("--fl-hover-line", C.flScroll);
+    document.documentElement.style.setProperty("--fl-hover", mode === "dark" ? "rgba(255,255,255,.13)" : "rgba(0,0,0,.1)");
+    document.documentElement.style.setProperty("--fl-hover-ring", mode === "dark" ? "rgba(255,255,255,.6)" : "rgba(0,0,0,.55)");
+    document.documentElement.style.setProperty("--fl-hover-line", C.muted);
     document.documentElement.style.setProperty("--fl-ink", C.ink);
+    document.documentElement.style.setProperty("--fl-hover-filter", mode === "dark" ? "brightness(1.3)" : "brightness(.88)");
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", C.paper);
   }
@@ -1892,9 +1901,14 @@ try {
         setWordErr(null);
         if (!e.target.value.trim()) setAnchorId(null);
       }, placeholder: "paste in your question/thought from notes", style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 64, maxHeight: 96, resize: "none", borderColor: C.flField, borderRadius: 12, fontSize: 14 }) }),
+      // Anchor, framing and send appear once there is text in the box (the
+      // value, not focus, decides), and fold away again when it is emptied.
+      // Collapsed they are hidden from the tab order too.
+      h("div", { "data-composer": ready ? "open" : "closed", "aria-hidden": !ready, style: { display: "grid", gridTemplateRows: ready ? "1fr" : "0fr", opacity: ready ? 1 : 0, visibility: ready ? "visible" : "hidden", transition: ready ? "grid-template-rows 180ms ease, opacity 180ms ease" : "grid-template-rows 180ms ease, opacity 120ms ease, visibility 0s linear 180ms" } },
+      h("div", { style: { minHeight: 0, overflow: "hidden", margin: "0 -3px", padding: ready ? "0 3px 3px" : "0 3px" } },
       h("div", { style: { display: "flex", alignItems: "center", gap: 6, marginTop: S.x100, fontSize: 12, lineHeight: "16px", color: C.ink, minHeight: 18 } },
         h("span", { style: { flexShrink: 0 } }, "anchor:"),
-        ready && chosen ? h("button", { className: "focusable", title: "Not this one", onClick: () => {
+        ready && chosen ? h("button", { className: "focusable fl-link", title: "Not this one", onClick: () => {
           setDismissed(true);
           setAnchorId(null);
         }, style: { border: "none", background: "transparent", padding: 0, color: C.ink, fontSize: 12, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0, textDecoration: "underline", textDecorationColor: C.flField } }, chosen.label) : h("span", { style: { color: C.muted } }, ready ? "none found" : "—")),
@@ -1915,11 +1929,11 @@ try {
           }),
           (shown.length > 0 || wordErr || original) && h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted, display: "flex", gap: S.x100, flexWrap: "wrap" } },
             h("span", null, wordErr || (shown.length ? usedAI ? "worded by AI — edit anything you like" : "worked out on this device" : "")),
-            original && h("button", { className: "focusable", onClick: () => {
+            original && h("button", { className: "focusable fl-link", onClick: () => {
               setText(original);
               setOriginal(null);
             }, style: { border: "none", background: "transparent", padding: 0, fontSize: 11, color: C.ink, textDecoration: "underline", cursor: "pointer" } }, "put my own words back")))),
-      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: S.x200 } }, [["table", "share with table", C.aTable], ["now", "send now", C.aNow], ["later", "ask later", C.aLater]].map(([k, lab, bg]) => h("button", { key: k, className: "focusable", disabled: !ready || sending, onClick: () => send(k), style: { border: "none", borderRadius: 10, background: bg, color: C.aInk, padding: "11px 4px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", cursor: ready && !sending ? "pointer" : "default", opacity: ready ? 1 : 0.55 } }, lab))));
+      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: S.x200 } }, [["table", "share with table", C.aTable], ["now", "send now", C.aNow], ["later", "ask later", C.aLater]].map(([k, lab, bg]) => h("button", { key: k, className: "focusable", disabled: !ready || sending, onClick: () => send(k), style: { border: "none", borderRadius: 10, background: bg, color: C.aInk, padding: "11px 4px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", cursor: ready && !sending ? "pointer" : "default", opacity: ready ? 1 : 0.55 } }, lab))))));
     const empty = (title, body) => h("div", { style: { padding: `${S.x400 || 32}px ${S.x200}px`, textAlign: "center" } }, h("div", { style: { fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 4 } }, title), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.muted } }, body));
     const card = (t, extra) => h(QuestionCard, __spreadValues({ key: t.id, t, anchors: state.anchors, topics: state.topics, me, busy: sending, mine: t.student_id === me.id, onMove: move, onRecall: recall, onDelete: del, onReply: addReply, onReact: async (th, on) => {
       await store.react(th.id, me.id, on);
