@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#F8F8F8" />
-<title>Say it · Teacher</title>
+<title>floorum · Teacher</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; background: #F8F8F8;
@@ -20,6 +20,13 @@
   .split { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
   .split-even { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
   @media (max-width: 900px) { .split, .split-even { grid-template-columns: 1fr; } }
+  .fl-scroll { scrollbar-width: thin; scrollbar-color: var(--fl-scroll, #ACACAC) transparent; }
+  .fl-scroll::-webkit-scrollbar { width: 6px; }
+  .fl-scroll::-webkit-scrollbar-thumb { background: var(--fl-scroll, #ACACAC); border-radius: 6px; }
+  .fl-scroll::-webkit-scrollbar-track { background: transparent; }
+  .fl-q .fl-tools { opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
+  .fl-q:hover .fl-tools, .fl-q:focus-within .fl-tools { opacity: 1; pointer-events: auto; }
+  @media (hover: none) { .fl-q .fl-tools { opacity: 1; pointer-events: auto; } }
   #boot { max-width: 520px; margin: 60px auto; padding: 24px; background: #fff;
     border: 1px solid #DDDEE1; border-radius: 12px; line-height: 1.6; color: #505258; font-size: 14px; }
 </style>
@@ -426,8 +433,47 @@ try {
     skipBg: "#F6C9C4",
     skipFg: "#AE2E24",
     // avoid
-    shell: "#EDEFEB"
+    shell: "#EDEFEB",
     // page behind the cards
+    logo: "#000000",
+    // the floorum mark
+    // floorum palette, sampled from the design screenshots.
+    // Section boxes, cards, fields: thin neutral lines.
+    flBox: "#E6E6E6",
+    flCard: "#E1E1E1",
+    flField: "#CDCDCD",
+    flSoftField: "#E3E3E3",
+    // Outline: covered, current, next.
+    tPrev: "#CACACA",
+    tPrevInk: "#1A1A1A",
+    tCur: "#70B4DE",
+    tCurInk: "#0E171C",
+    tNext: "#F8F8F8",
+    tNextLine: "#DDDDDD",
+    tNextInk: "#A3A3A3",
+    // Where a question goes: table (yellow), now (green), later (blue).
+    aTable: "#E4CA70",
+    aNow: "#90AB3A",
+    aLater: "#98C9E5",
+    aInk: "#1A1A1A",
+    laterSoft: "#DDEEF8",
+    // Tabs: my table / my questions, and the inactive one.
+    tabTable: "#F0E2AC",
+    tabNow: "#D3DEA8",
+    tabOff: "#D1D2CE",
+    tabInk: "#1A1A1A",
+    // Quiet buttons, the continue button, chips, scrollbar, card tools.
+    flGrey: "#EDEAEA",
+    flGreyInk: "#1A1A1A",
+    flGo: "#ACACAC",
+    flGoInk: "#1A1A1A",
+    chip: "#D9D9D9",
+    chipInk: "#333333",
+    flScroll: "#ACACAC",
+    flTrash: "#E58A86",
+    flPencil: "#B3B3B3",
+    flRing: "#CFCFCF",
+    flInk: "#000000"
   };
   const DARK = {
     paper: "#18191A",
@@ -462,12 +508,57 @@ try {
     waitFg: "#EFDD4E",
     skipBg: "#42221F",
     skipFg: "#FD9891",
-    shell: "#141614"
+    shell: "#141614",
+    logo: "#FFFFFF",
+    flBox: "#2E2F31",
+    flCard: "#34353A",
+    flField: "#45464A",
+    flSoftField: "#3A3B3F",
+    tPrev: "#3A3B3E",
+    tPrevInk: "#D6D6D6",
+    tCur: "#70B4DE",
+    tCurInk: "#0E171C",
+    tNext: "#242528",
+    tNextLine: "#3A3B3F",
+    tNextInk: "#8A8C91",
+    aTable: "#E4CA70",
+    aNow: "#90AB3A",
+    aLater: "#98C9E5",
+    aInk: "#1A1A1A",
+    laterSoft: "#23384A",
+    tabTable: "#4A4226",
+    tabNow: "#394022",
+    tabOff: "#2B2C2F",
+    tabInk: "#E6E6E6",
+    flGrey: "#2F3034",
+    flGreyInk: "#E6E6E6",
+    flGo: "#5A5B5F",
+    flGoInk: "#F2F2F2",
+    chip: "#3A3B3F",
+    chipInk: "#D6D6D6",
+    flScroll: "#5A5B5F",
+    flTrash: "#F08A85",
+    flPencil: "#8A8C91",
+    flRing: "#5A5B5F",
+    flInk: "#FFFFFF"
   };
   const C = __spreadValues({}, LIGHT);
+  // floorum logo, from "floorum logo.svg" (45 x 14). The file's white background
+  // rectangle is dropped and its black is drawn in the theme's logo colour, so the
+  // mark sits on light and dark surfaces alike: "floor" is knocked out of the box
+  // and shows whatever is behind it. The red dot keeps its own colour.
+  const LOGO_PATHS = [
+    ["#FF0000", "M43.7909 10.072C43.5829 10.072 43.4069 9.99998 43.2629 9.85598C43.1189 9.71198 43.0469 9.53598 43.0469 9.32798C43.0469 9.11998 43.1189 8.94398 43.2629 8.79998C43.4069 8.65598 43.5829 8.58398 43.7909 8.58398C43.9909 8.58398 44.1589 8.65598 44.2949 8.79998C44.4389 8.94398 44.5109 9.11998 44.5109 9.32798C44.5109 9.53598 44.4389 9.71198 44.2949 9.85598C44.1589 9.99998 43.9909 10.072 43.7909 10.072Z"],
+    ["ink", "M39.7482 4C40.5642 4 41.2202 4.22454 41.7162 4.67361C42.2202 5.11556 42.4722 5.73571 42.4722 6.53406V10.009H40.7922V6.73721C40.7922 6.27388 40.6602 5.92104 40.3962 5.67868C40.1322 5.42919 39.7722 5.30445 39.3162 5.30445C38.8602 5.30445 38.4962 5.42919 38.2242 5.67868C37.9602 5.92104 37.8282 6.27388 37.8282 6.73721V10.009H36.1482V6.73721C36.1482 6.27388 36.0162 5.92104 35.7522 5.67868C35.4882 5.42919 35.1282 5.30445 34.6722 5.30445C34.2082 5.30445 33.8402 5.42919 33.5682 5.67868C33.3042 5.92104 33.1722 6.27388 33.1722 6.73721V10.009H31.4922V4.08554H33.1722V4.80192C33.3882 4.55243 33.6642 4.35641 34.0002 4.21384C34.3442 4.07128 34.7202 4 35.1282 4C35.6482 4 36.1122 4.09979 36.5202 4.29938C36.9282 4.49184 37.2442 4.76984 37.4682 5.13338C37.6842 4.79123 37.9962 4.51679 38.4042 4.31007C38.8202 4.10336 39.2682 4 39.7482 4Z"],
+    ["ink", "M30.5548 4.08569V10.0092H28.8628V9.26073C28.6468 9.51735 28.3627 9.7205 28.0107 9.87019C27.6667 10.0128 27.2908 10.084 26.8828 10.084C26.3628 10.084 25.9028 9.98781 25.5028 9.79535C25.1028 9.59576 24.7868 9.30707 24.5548 8.92927C24.3308 8.54435 24.2188 8.08815 24.2188 7.56067V4.08569H25.8988V7.34682C25.8988 7.81728 26.0308 8.18082 26.2948 8.43743C26.5588 8.68692 26.9188 8.81166 27.3748 8.81166C27.8388 8.81166 28.2028 8.68692 28.4668 8.43743C28.7308 8.18082 28.8628 7.81728 28.8628 7.34682V4.08569H30.5548Z"],
+    ["ink", "M4.54297 10H5.08301L7 0H21.5C22.6046 0 23.5 0.895431 23.5 2V3.5C23.5 3.5 23.3358 3.48414 22.8799 3.74805C22.4319 4.01204 22.0792 4.3917 21.8232 4.8877L22.0752 3.48438H21.5352L20.3721 10H20.9111L21.584 6.24414C21.728 5.42023 22.0433 4.82778 22.5312 4.46777C23.0193 4.09977 23.5 4 23.5 4V10C23.5 11.1046 22.6046 12 21.5 12H2C1.93839 12 1.87757 11.9957 1.81738 11.9902L3.25488 3.96387H4.94727L5.03125 3.48438H3.33887L3.42285 3.02832C3.51885 2.48435 3.70733 2.09254 3.9873 1.85254C4.2753 1.61254 4.73147 1.49219 5.35547 1.49219L5.43945 1.0127C4.65565 1.0127 4.05936 1.17607 3.65137 1.50391C3.25137 1.83191 2.99109 2.34032 2.87109 3.02832L2.78711 3.48438H0V2C1.28853e-07 0.895431 0.895431 0 2 0H6.45996L4.54297 10ZM0 3.96387H2.70312L1.29883 11.8711C0.54055 11.5868 2.50092e-08 10.8575 0 10V3.96387ZM10.3867 3.40039C9.65885 3.40043 8.99914 3.58422 8.40723 3.95215C7.81523 4.31215 7.35065 4.80374 7.01465 5.42773C6.68667 6.0517 6.52346 6.73182 6.52344 7.46777C6.52344 8.2757 6.76697 8.91571 7.25488 9.3877C7.75082 9.85964 8.40679 10.0956 9.22266 10.0957C9.95066 10.0957 10.6074 9.91566 11.1914 9.55566C11.7831 9.18776 12.2471 8.69205 12.583 8.06836C12.9189 7.44448 13.0869 6.76416 13.0869 6.02832C13.0869 5.49233 12.9713 5.02774 12.7393 4.63574C12.5153 4.23574 12.199 3.93163 11.791 3.72363C11.383 3.50765 10.9147 3.40039 10.3867 3.40039ZM17.4014 3.40039C16.6734 3.40039 16.0129 3.58415 15.4209 3.95215C14.8291 4.31209 14.3652 4.80393 14.0293 5.42773C13.7013 6.0517 13.5371 6.73182 13.5371 7.46777C13.5371 8.27577 13.7815 8.9157 14.2695 9.3877C14.7655 9.85962 15.4214 10.0957 16.2373 10.0957C16.9652 10.0957 17.6211 9.91563 18.2051 9.55566C18.7969 9.18777 19.2607 8.69208 19.5967 8.06836C19.9326 7.44448 20.1015 6.76416 20.1016 6.02832C20.1016 5.49232 19.9849 5.02774 19.7529 4.63574C19.5289 4.23584 19.2126 3.9316 18.8047 3.72363C18.3969 3.50782 17.9291 3.40043 17.4014 3.40039ZM10.3027 3.85547C10.9427 3.85547 11.4754 4.04392 11.8994 4.41992C12.3232 4.79589 12.5351 5.33998 12.5352 6.05176C12.5352 6.69176 12.3952 7.28412 12.1152 7.82812C11.8432 8.37208 11.4589 8.80776 10.9629 9.13574C10.4749 9.46374 9.91892 9.62793 9.29492 9.62793C8.65493 9.62792 8.12321 9.43947 7.69922 9.06348C7.28326 8.68748 7.0752 8.1436 7.0752 7.43164C7.07523 6.79974 7.21144 6.21189 7.4834 5.66797C7.75539 5.11603 8.13508 4.67563 8.62305 4.34766C9.11095 4.01977 9.6709 3.85551 10.3027 3.85547ZM17.3174 3.85547C17.9573 3.85552 18.4891 4.04398 18.9131 4.41992C19.3371 4.7959 19.5488 5.33983 19.5488 6.05176C19.5488 6.69176 19.4089 7.28412 19.1289 7.82812C18.857 8.37187 18.4733 8.80782 17.9775 9.13574C17.4897 9.46366 16.9334 9.62785 16.3096 9.62793C15.6696 9.62793 15.1369 9.43948 14.7129 9.06348C14.2971 8.68749 14.0889 8.14345 14.0889 7.43164C14.0889 6.79977 14.2251 6.21187 14.4971 5.66797C14.769 5.11603 15.1488 4.67565 15.6367 4.34766C16.1247 4.01966 16.6854 3.85547 17.3174 3.85547Z"],
+    ["ink", "M25.248 12.21V12.288H24.496V12.21H25.248ZM25.9633 12.2C25.994 12.112 26.0493 12.04 26.1293 11.984C26.2106 11.928 26.3086 11.9 26.4233 11.9C26.5246 11.9 26.6146 11.9227 26.6933 11.968C26.7733 12.0133 26.8353 12.078 26.8793 12.162C26.9246 12.246 26.9473 12.344 26.9473 12.456C26.9473 12.568 26.9246 12.6667 26.8793 12.752C26.8353 12.836 26.7733 12.9013 26.6933 12.948C26.6146 12.9933 26.5246 13.016 26.4233 13.016C26.31 13.016 26.2126 12.988 26.1313 12.932C26.0513 12.8747 25.9953 12.8027 25.9633 12.716V13.512H25.8733V11.914H25.9633V12.2ZM26.8553 12.456C26.8553 12.3573 26.8366 12.272 26.7993 12.2C26.762 12.128 26.7093 12.0733 26.6413 12.036C26.5746 11.9973 26.4973 11.978 26.4093 11.978C26.3253 11.978 26.2493 11.998 26.1813 12.038C26.1133 12.0767 26.06 12.1327 26.0213 12.206C25.9826 12.278 25.9633 12.3613 25.9633 12.456C25.9633 12.552 25.9826 12.6367 26.0213 12.71C26.06 12.782 26.1133 12.838 26.1813 12.878C26.2493 12.9167 26.3253 12.936 26.4093 12.936C26.4973 12.936 26.5746 12.9167 26.6413 12.878C26.7093 12.8393 26.762 12.784 26.7993 12.712C26.8366 12.64 26.8553 12.5547 26.8553 12.456ZM27.003 12.456C27.003 12.344 27.025 12.246 27.069 12.162C27.1143 12.078 27.1763 12.0133 27.255 11.968C27.335 11.9227 27.4257 11.9 27.527 11.9C27.6417 11.9 27.739 11.928 27.819 11.984C27.899 12.04 27.955 12.1113 27.987 12.198V11.914H28.077V13H27.987V12.714C27.955 12.802 27.8983 12.8747 27.817 12.932C27.737 12.988 27.6403 13.016 27.527 13.016C27.4257 13.016 27.335 12.9933 27.255 12.948C27.1763 12.9013 27.1143 12.836 27.069 12.752C27.025 12.6667 27.003 12.568 27.003 12.456ZM27.987 12.456C27.987 12.3613 27.967 12.278 27.927 12.206C27.8883 12.1327 27.835 12.0767 27.767 12.038C27.699 11.998 27.623 11.978 27.539 11.978C27.451 11.978 27.3737 11.9973 27.307 12.036C27.2403 12.0733 27.1883 12.128 27.151 12.2C27.1137 12.272 27.095 12.3573 27.095 12.456C27.095 12.5547 27.1137 12.64 27.151 12.712C27.1883 12.784 27.2403 12.8393 27.307 12.878C27.375 12.9167 27.4523 12.936 27.539 12.936C27.623 12.936 27.699 12.9167 27.767 12.878C27.8363 12.838 27.8903 12.782 27.929 12.71C27.9677 12.6367 27.987 12.552 27.987 12.456ZM28.3347 12.138C28.3614 12.058 28.4087 11.9973 28.4767 11.956C28.5447 11.9133 28.6314 11.892 28.7367 11.892V11.986H28.7067C28.6 11.986 28.5114 12.0167 28.4407 12.078C28.37 12.138 28.3347 12.2367 28.3347 12.374V13H28.2447V11.914H28.3347V12.138ZM28.9179 11.992V12.71C28.9179 12.79 28.9326 12.8453 28.9619 12.876C28.9913 12.9053 29.0433 12.92 29.1179 12.92H29.2399V13H29.1039C29.0093 13 28.9393 12.978 28.8939 12.934C28.8499 12.8887 28.8279 12.814 28.8279 12.71V11.992H28.6639V11.914H28.8279V11.638H28.9179V11.914H29.2399V11.992H28.9179ZM29.3633 11.672C29.3419 11.672 29.3239 11.6653 29.3093 11.652C29.2946 11.6373 29.2873 11.618 29.2873 11.594C29.2873 11.5713 29.2946 11.5527 29.3093 11.538C29.3239 11.5233 29.3419 11.516 29.3633 11.516C29.3846 11.516 29.4026 11.5233 29.4173 11.538C29.4319 11.5527 29.4393 11.5713 29.4393 11.594C29.4393 11.618 29.4319 11.6373 29.4173 11.652C29.4026 11.6653 29.3846 11.672 29.3633 11.672ZM29.4073 11.914V13H29.3173V11.914H29.4073ZM29.5212 12.456C29.5212 12.3427 29.5432 12.244 29.5872 12.16C29.6325 12.076 29.6945 12.012 29.7732 11.968C29.8532 11.9227 29.9445 11.9 30.0472 11.9C30.1832 11.9 30.2945 11.934 30.3812 12.002C30.4692 12.07 30.5239 12.1613 30.5452 12.276H30.4512C30.4339 12.1827 30.3885 12.1093 30.3152 12.056C30.2432 12.0027 30.1539 11.976 30.0472 11.976C29.9672 11.976 29.8945 11.994 29.8292 12.03C29.7639 12.0647 29.7112 12.1187 29.6712 12.192C29.6325 12.264 29.6132 12.352 29.6132 12.456C29.6132 12.5613 29.6325 12.65 29.6712 12.722C29.7112 12.794 29.7639 12.848 29.8292 12.884C29.8945 12.92 29.9672 12.938 30.0472 12.938C30.1539 12.938 30.2432 12.9113 30.3152 12.858C30.3885 12.8047 30.4339 12.7313 30.4512 12.638H30.5452C30.5239 12.7513 30.4692 12.8427 30.3812 12.912C30.2932 12.9813 30.1819 13.016 30.0472 13.016C29.9445 13.016 29.8532 12.9933 29.7732 12.948C29.6945 12.9027 29.6325 12.838 29.5872 12.754C29.5432 12.6687 29.5212 12.5693 29.5212 12.456ZM30.7054 11.672C30.6841 11.672 30.6661 11.6653 30.6514 11.652C30.6367 11.6373 30.6294 11.618 30.6294 11.594C30.6294 11.5713 30.6367 11.5527 30.6514 11.538C30.6661 11.5233 30.6841 11.516 30.7054 11.516C30.7267 11.516 30.7447 11.5233 30.7594 11.538C30.7741 11.5527 30.7814 11.5713 30.7814 11.594C30.7814 11.618 30.7741 11.6373 30.7594 11.652C30.7447 11.6653 30.7267 11.672 30.7054 11.672ZM30.7494 11.914V13H30.6594V11.914H30.7494ZM31.0093 12.2C31.04 12.112 31.0953 12.04 31.1753 11.984C31.2566 11.928 31.3546 11.9 31.4693 11.9C31.5706 11.9 31.6606 11.9227 31.7393 11.968C31.8193 12.0133 31.8813 12.078 31.9253 12.162C31.9706 12.246 31.9933 12.344 31.9933 12.456C31.9933 12.568 31.9706 12.6667 31.9253 12.752C31.8813 12.836 31.8193 12.9013 31.7393 12.948C31.6606 12.9933 31.5706 13.016 31.4693 13.016C31.356 13.016 31.2586 12.988 31.1773 12.932C31.0973 12.8747 31.0413 12.8027 31.0093 12.716V13.512H30.9193V11.914H31.0093V12.2ZM31.9013 12.456C31.9013 12.3573 31.8826 12.272 31.8453 12.2C31.808 12.128 31.7553 12.0733 31.6873 12.036C31.6206 11.9973 31.5433 11.978 31.4553 11.978C31.3713 11.978 31.2953 11.998 31.2273 12.038C31.1593 12.0767 31.106 12.1327 31.0673 12.206C31.0286 12.278 31.0093 12.3613 31.0093 12.456C31.0093 12.552 31.0286 12.6367 31.0673 12.71C31.106 12.782 31.1593 12.838 31.2273 12.878C31.2953 12.9167 31.3713 12.936 31.4553 12.936C31.5433 12.936 31.6206 12.9167 31.6873 12.878C31.7553 12.8393 31.808 12.784 31.8453 12.712C31.8826 12.64 31.9013 12.5547 31.9013 12.456ZM32.049 12.456C32.049 12.344 32.071 12.246 32.115 12.162C32.1603 12.078 32.2223 12.0133 32.301 11.968C32.381 11.9227 32.4717 11.9 32.573 11.9C32.6877 11.9 32.785 11.928 32.865 11.984C32.945 12.04 33.001 12.1113 33.033 12.198V11.914H33.123V13H33.033V12.714C33.001 12.802 32.9443 12.8747 32.863 12.932C32.783 12.988 32.6863 13.016 32.573 13.016C32.4717 13.016 32.381 12.9933 32.301 12.948C32.2223 12.9013 32.1603 12.836 32.115 12.752C32.071 12.6667 32.049 12.568 32.049 12.456ZM33.033 12.456C33.033 12.3613 33.013 12.278 32.973 12.206C32.9343 12.1327 32.881 12.0767 32.813 12.038C32.745 11.998 32.669 11.978 32.585 11.978C32.497 11.978 32.4197 11.9973 32.353 12.036C32.2863 12.0733 32.2343 12.128 32.197 12.2C32.1597 12.272 32.141 12.3573 32.141 12.456C32.141 12.5547 32.1597 12.64 32.197 12.712C32.2343 12.784 32.2863 12.8393 32.353 12.878C32.421 12.9167 32.4983 12.936 32.585 12.936C32.669 12.936 32.745 12.9167 32.813 12.878C32.8823 12.838 32.9363 12.782 32.975 12.71C33.0137 12.6367 33.033 12.552 33.033 12.456ZM33.4247 11.992V12.71C33.4247 12.79 33.4394 12.8453 33.4687 12.876C33.4981 12.9053 33.5501 12.92 33.6247 12.92H33.7467V13H33.6107C33.5161 13 33.4461 12.978 33.4007 12.934C33.3567 12.8887 33.3347 12.814 33.3347 12.71V11.992H33.1707V11.914H33.3347V11.638H33.4247V11.914H33.7467V11.992H33.4247ZM33.8701 11.672C33.8487 11.672 33.8307 11.6653 33.8161 11.652C33.8014 11.6373 33.7941 11.618 33.7941 11.594C33.7941 11.5713 33.8014 11.5527 33.8161 11.538C33.8307 11.5233 33.8487 11.516 33.8701 11.516C33.8914 11.516 33.9094 11.5233 33.9241 11.538C33.9387 11.5527 33.9461 11.5713 33.9461 11.594C33.9461 11.618 33.9387 11.6373 33.9241 11.652C33.9094 11.6653 33.8914 11.672 33.8701 11.672ZM33.9141 11.914V13H33.8241V11.914H33.9141ZM34.562 13.016C34.4607 13.016 34.3693 12.9933 34.288 12.948C34.2067 12.9027 34.1427 12.838 34.096 12.754C34.0507 12.6687 34.028 12.5693 34.028 12.456C34.028 12.344 34.0513 12.246 34.098 12.162C34.1447 12.0767 34.2087 12.012 34.29 11.968C34.3727 11.9227 34.4647 11.9 34.566 11.9C34.6673 11.9 34.7587 11.9227 34.84 11.968C34.9213 12.012 34.9847 12.076 35.03 12.16C35.0767 12.244 35.1 12.3427 35.1 12.456C35.1 12.5693 35.0767 12.6687 35.03 12.754C34.9833 12.838 34.9187 12.9027 34.836 12.948C34.7547 12.9933 34.6633 13.016 34.562 13.016ZM34.562 12.936C34.6407 12.936 34.714 12.9187 34.782 12.884C34.8513 12.848 34.9067 12.794 34.948 12.722C34.9893 12.65 35.01 12.5613 35.01 12.456C35.01 12.352 34.9893 12.264 34.948 12.192C34.9067 12.12 34.852 12.0667 34.784 12.032C34.716 11.996 34.6427 11.978 34.564 11.978C34.4853 11.978 34.412 11.996 34.344 12.032C34.2773 12.0667 34.2233 12.12 34.182 12.192C34.1407 12.264 34.12 12.352 34.12 12.456C34.12 12.5613 34.14 12.65 34.18 12.722C34.2213 12.794 34.2753 12.848 34.342 12.884C34.41 12.9187 34.4833 12.936 34.562 12.936ZM35.7031 11.892C35.8324 11.892 35.9377 11.932 36.0191 12.012C36.1004 12.0907 36.1411 12.208 36.1411 12.364V13H36.0531V12.37C36.0531 12.2407 36.0204 12.142 35.9551 12.074C35.8897 12.0047 35.8011 11.97 35.6891 11.97C35.5717 11.97 35.4777 12.0073 35.4071 12.082C35.3377 12.1567 35.3031 12.2673 35.3031 12.414V13H35.2131V11.914H35.3031V12.144C35.3337 12.0627 35.3844 12.0007 35.4551 11.958C35.5271 11.914 35.6097 11.892 35.7031 11.892ZM36.7936 12.2C36.8243 12.112 36.8796 12.04 36.9596 11.984C37.0409 11.928 37.1389 11.9 37.2536 11.9C37.3549 11.9 37.4449 11.9227 37.5236 11.968C37.6036 12.0133 37.6656 12.078 37.7096 12.162C37.7549 12.246 37.7776 12.344 37.7776 12.456C37.7776 12.568 37.7549 12.6667 37.7096 12.752C37.6656 12.836 37.6036 12.9013 37.5236 12.948C37.4449 12.9933 37.3549 13.016 37.2536 13.016C37.1403 13.016 37.0429 12.988 36.9616 12.932C36.8816 12.8747 36.8256 12.8027 36.7936 12.716V13.512H36.7036V11.914H36.7936V12.2ZM37.6856 12.456C37.6856 12.3573 37.6669 12.272 37.6296 12.2C37.5923 12.128 37.5396 12.0733 37.4716 12.036C37.4049 11.9973 37.3276 11.978 37.2396 11.978C37.1556 11.978 37.0796 11.998 37.0116 12.038C36.9436 12.0767 36.8903 12.1327 36.8516 12.206C36.8129 12.278 36.7936 12.3613 36.7936 12.456C36.7936 12.552 36.8129 12.6367 36.8516 12.71C36.8903 12.782 36.9436 12.838 37.0116 12.878C37.0796 12.9167 37.1556 12.936 37.2396 12.936C37.3276 12.936 37.4049 12.9167 37.4716 12.878C37.5396 12.8393 37.5923 12.784 37.6296 12.712C37.6669 12.64 37.6856 12.5547 37.6856 12.456ZM37.8333 12.456C37.8333 12.344 37.8553 12.246 37.8993 12.162C37.9446 12.078 38.0066 12.0133 38.0853 11.968C38.1653 11.9227 38.256 11.9 38.3573 11.9C38.472 11.9 38.5693 11.928 38.6493 11.984C38.7293 12.04 38.7853 12.1113 38.8173 12.198V11.914H38.9073V13H38.8173V12.714C38.7853 12.802 38.7286 12.8747 38.6473 12.932C38.5673 12.988 38.4706 13.016 38.3573 13.016C38.256 13.016 38.1653 12.9933 38.0853 12.948C38.0066 12.9013 37.9446 12.836 37.8993 12.752C37.8553 12.6667 37.8333 12.568 37.8333 12.456ZM38.8173 12.456C38.8173 12.3613 38.7973 12.278 38.7573 12.206C38.7186 12.1327 38.6653 12.0767 38.5973 12.038C38.5293 11.998 38.4533 11.978 38.3693 11.978C38.2813 11.978 38.204 11.9973 38.1373 12.036C38.0706 12.0733 38.0186 12.128 37.9813 12.2C37.944 12.272 37.9253 12.3573 37.9253 12.456C37.9253 12.5547 37.944 12.64 37.9813 12.712C38.0186 12.784 38.0706 12.8393 38.1373 12.878C38.2053 12.9167 38.2826 12.936 38.3693 12.936C38.4533 12.936 38.5293 12.9167 38.5973 12.878C38.6666 12.838 38.7206 12.782 38.7593 12.71C38.798 12.6367 38.8173 12.552 38.8173 12.456ZM39.165 12.138C39.1917 12.058 39.239 11.9973 39.307 11.956C39.375 11.9133 39.4617 11.892 39.567 11.892V11.986H39.537C39.4303 11.986 39.3417 12.0167 39.271 12.078C39.2003 12.138 39.165 12.2367 39.165 12.374V13H39.075V11.914H39.165V12.138ZM39.7482 11.992V12.71C39.7482 12.79 39.7629 12.8453 39.7922 12.876C39.8216 12.9053 39.8736 12.92 39.9482 12.92H40.0702V13H39.9342C39.8396 13 39.7696 12.978 39.7242 12.934C39.6802 12.8887 39.6582 12.814 39.6582 12.71V11.992H39.4942V11.914H39.6582V11.638H39.7482V11.914H40.0702V11.992H39.7482ZM40.6376 11.892C40.7669 11.892 40.8723 11.932 40.9536 12.012C41.0349 12.0907 41.0756 12.208 41.0756 12.364V13H40.9876V12.37C40.9876 12.2407 40.9549 12.142 40.8896 12.074C40.8243 12.0047 40.7356 11.97 40.6236 11.97C40.5063 11.97 40.4123 12.0073 40.3416 12.082C40.2723 12.1567 40.2376 12.2673 40.2376 12.414V13H40.1476V11.914H40.2376V12.144C40.2683 12.0627 40.3189 12.0007 40.3896 11.958C40.4616 11.914 40.5443 11.892 40.6376 11.892ZM42.2117 12.384C42.2117 12.432 42.2104 12.468 42.2077 12.492H41.2697C41.2724 12.5893 41.2937 12.6713 41.3337 12.738C41.3737 12.8047 41.4264 12.8547 41.4917 12.888C41.557 12.9213 41.6284 12.938 41.7057 12.938C41.8124 12.938 41.9017 12.912 41.9737 12.86C42.0457 12.8067 42.091 12.7347 42.1097 12.644H42.2037C42.1824 12.7547 42.1277 12.8447 42.0397 12.914C41.9517 12.982 41.8404 13.016 41.7057 13.016C41.6044 13.016 41.5137 12.9933 41.4337 12.948C41.3537 12.9027 41.291 12.838 41.2457 12.754C41.2004 12.6687 41.1777 12.5693 41.1777 12.456C41.1777 12.3427 41.1997 12.244 41.2437 12.16C41.289 12.076 41.3517 12.012 41.4317 11.968C41.5117 11.9227 41.603 11.9 41.7057 11.9C41.8097 11.9 41.8997 11.9227 41.9757 11.968C42.053 12.012 42.1117 12.0713 42.1517 12.146C42.1917 12.2193 42.2117 12.2987 42.2117 12.384ZM42.1217 12.418C42.1257 12.322 42.1084 12.2407 42.0697 12.174C42.0324 12.1073 41.981 12.058 41.9157 12.026C41.8504 11.9927 41.7797 11.976 41.7037 11.976C41.6277 11.976 41.557 11.9927 41.4917 12.026C41.4277 12.058 41.375 12.1073 41.3337 12.174C41.2937 12.2407 41.2724 12.322 41.2697 12.418H42.1217ZM42.4137 12.138C42.4404 12.058 42.4877 11.9973 42.5557 11.956C42.6237 11.9133 42.7104 11.892 42.8157 11.892V11.986H42.7857C42.679 11.986 42.5904 12.0167 42.5197 12.078C42.449 12.138 42.4137 12.2367 42.4137 12.374V13H42.3237V11.914H42.4137V12.138Z"]
+  ];
+  const Logo = ({ height = 32 }) => /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 45 14", height, width: Math.round(height * 45 / 14), role: "img", "aria-label": "floorum", style: { display: "block", flexShrink: 0 } }, LOGO_PATHS.map(([fill, d], i) => /* @__PURE__ */ React.createElement("path", { key: i, d, fill: fill === "ink" ? C.logo : fill })));
   function applyTheme(mode) {
     Object.assign(C, mode === "dark" ? DARK : LIGHT);
     document.body.style.background = C.paper;
+    document.documentElement.style.setProperty("--fl-scroll", C.flScroll);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", C.paper);
   }
@@ -610,7 +701,7 @@ try {
     }
   };
   function resetDevice() {
-    if (!confirm("Reset Say it on this device? This clears the saved sign-in, the class session and local test data. The shared class in Supabase is not touched.")) return;
+    if (!confirm("Reset floorum on this device? This clears the saved sign-in, the class session and local test data. The shared class in Supabase is not touched.")) return;
     ["sayit:role", "sayit:session", "sayit:identity", "sayit:teacherClass", "sayit:solo", "sayit:demo:v3"].forEach(LS.del);
     Object.keys(localStorage).filter((k) => k.startsWith("sayit:private:") || k.startsWith("sayit:notes:") || k.startsWith("sayit:tkey:") || k.startsWith("sayit:pulse:")).forEach((k) => {
       try {
@@ -1191,29 +1282,30 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     { id: "c5", name: "Designing For The Indian Context - Sec B", hue: "#946F00" },
     { id: "c6", name: "Designing For Influence - Sec B", hue: "#1558BC" }
   ];
-  function FacultyChrome({ status, children, tools }) {
+  // Small house icon for the header's "back to My Courses" control.
+  const HomeIcon = () => /* @__PURE__ */ React.createElement("svg", { width: 18, height: 18, viewBox: "0 0 16 16", "aria-hidden": true, style: { display: "block" } }, /* @__PURE__ */ React.createElement("path", { d: "M2.25 7.25 8 2.5l5.75 4.75V13a.75.75 0 0 1-.75.75H9.75V10.25h-3.5v3.5H3a.75.75 0 0 1-.75-.75V7.25Z", fill: "none", stroke: C.body, strokeWidth: 1.4, strokeLinejoin: "round" }));
+  // onHome: shown on every faculty screen except My Courses itself.
+  // showStatus: My Courses has no session, so it carries no session pill.
+  function FacultyChrome({ status, children, tools, onHome, showStatus = true }) {
     const live = status === "live";
     return /* @__PURE__ */ React.createElement("div", { style: { minHeight: "100vh", background: C.shell } }, /* @__PURE__ */ React.createElement("header", { style: { background: C.surface, borderBottom: `1px solid ${C.line}` } }, /* @__PURE__ */ React.createElement("div", { style: {
       maxWidth: 1180,
       margin: "0 auto",
-      padding: `${S.x150}px ${S.x300}px`,
+      padding: `${S.x200}px ${S.x300}px`,
       display: "flex",
       alignItems: "center",
       gap: S.x100
-    } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 22, fontWeight: 700, letterSpacing: -0.4, color: C.ink } }, "Say it"), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({
+    } }, /* @__PURE__ */ React.createElement(Logo, { height: 36 }), showStatus && /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({
       display: "inline-flex",
-      alignItems: "center",
-      gap: S.x050
+      alignItems: "center"
     }, F.small), {
       fontWeight: 600,
-      color: live ? C.live : C.muted
-    }) }, /* @__PURE__ */ React.createElement("span", { className: live ? "livedot" : "", style: {
-      width: 5,
-      height: 5,
+      color: live ? C.live : C.body,
+      border: `1px solid ${live ? C.live : C.lineBold}`,
       borderRadius: R.full,
-      background: live ? C.live : C.muted,
-      display: "inline-block"
-    } }), live ? "Session in progress" : "Session not started"), /* @__PURE__ */ React.createElement("div", { style: { marginLeft: "auto", display: "flex", alignItems: "center", gap: S.x150 } }, tools, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({
+      padding: `${S.x025}px ${S.x150}px`,
+      whiteSpace: "nowrap"
+    }) }, live ? "Session in progress" : "Session not started"), /* @__PURE__ */ React.createElement("div", { style: { marginLeft: "auto", display: "flex", alignItems: "center", gap: S.x150 } }, onHome && /* @__PURE__ */ React.createElement("button", { className: "focusable", onClick: onHome, title: "My Courses", "aria-label": "My Courses", style: { width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", border: "none", borderRadius: R.md, background: "transparent", cursor: "pointer", padding: 0 } }, /* @__PURE__ */ React.createElement(HomeIcon, null)), tools, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({
       width: 36,
       height: 36,
       borderRadius: R.full,
@@ -1225,9 +1317,9 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       color: C.muted
     }) }, "S"), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 15, color: C.ink }) }, "Sachendra Singh Yadav")))), /* @__PURE__ */ React.createElement("main", { style: { maxWidth: 1180, margin: "0 auto", padding: `${S.x300}px ${S.x300}px ${S.x600 || 64}px` } }, children));
   }
-  function CoursesHome({ onStart, openable, onOpen, onOpenCode }) {
+  function CoursesHome({ onStart, openable, onOpen, onOpenCode, savedCode }) {
     const [sem, setSem] = useState("Sem 05");
-    const [code, setCode] = useState("");
+    const [code, setCode] = useState(() => isCode(savedCode) ? savedCode : "");
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState(null);
     async function openByCode() {
@@ -1314,7 +1406,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         }
       },
       /* @__PURE__ */ React.createElement("div", { style: { height: 110, background: C.sunken, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 30, color: C.ink, lineHeight: 1 } }, "+")),
-      /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({ padding: S.x150 }, F.body), { color: C.ink }) }, "Start a class")
+      /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({ padding: S.x150 }, F.body), { color: C.ink }) }, "Start a new course")
     )), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x300, display: "flex", alignItems: "flex-end", gap: S.x200, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Btn, null, "View all courses (", COURSES.length, ")"), /* @__PURE__ */ React.createElement("div", { style: { marginLeft: "auto", display: "flex", alignItems: "flex-end", gap: S.x100 } }, /* @__PURE__ */ React.createElement(Field, { label: "Open a class you already made" }, /* @__PURE__ */ React.createElement(
       "input",
       {
@@ -1333,7 +1425,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
   function CreateClass({ store, onCreated, onBack }) {
     const [name, setName] = useState("");
     const [busy, setBusy] = useState(false);
-    return /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 420, margin: "40px auto 0" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 26, lineHeight: "32px", marginBottom: S.x200, color: C.ink }) }, "Start a class"), /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement(Field, { label: "What's the class called?" }, /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 420, margin: "40px auto 0" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 26, lineHeight: "32px", marginBottom: S.x200, color: C.ink, textAlign: "center" }) }, "Start a new course"), /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement(Field, { label: "What's the class called?" }, /* @__PURE__ */ React.createElement(
       "input",
       {
         className: "focusable",
@@ -1362,8 +1454,52 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       busy ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { color: C.onInk, size: 14 }), " Creating") : "Create it"
     ))), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginTop: S.x200 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: onBack }, "Back to my courses")));
   }
-  function ClassHeader({ state, store, reload, onToast, onStarted, firstRun }) {
+  // Copy text to the clipboard; resolves true only if it actually copied.
+  // navigator.clipboard exists only in secure contexts (https, localhost), so on
+  // a plain-http address such as a LAN IP it is undefined; fall back to a hidden
+  // textarea and execCommand("copy"), which works there.
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (e) {
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
+  // Both labels occupy the same grid cell, so swapping to "Copied" does not
+  // change the button's width or nudge its neighbour.
+  const SwapLabel = ({ on, label, done }) => /* @__PURE__ */ React.createElement("span", { style: { display: "inline-grid" } }, /* @__PURE__ */ React.createElement("span", { style: { gridArea: "1 / 1", visibility: on ? "hidden" : "visible" } }, label), /* @__PURE__ */ React.createElement("span", { style: { gridArea: "1 / 1", visibility: on ? "visible" : "hidden", color: C.okFg, textAlign: "center" } }, done));
+  function ClassHeader({ state, store, reload, onToast, onStarted, firstRun, onViewSetup }) {
+    // The real student join URL for this class: student.html?c=CODE, resolved
+    // against wherever this page is being served from. The QR link is the same
+    // URL, since it is what a QR code has to open.
     const link = makeStudentLink(state.klass.code);
+    const [copied, setCopied] = useState(null);
+    async function copyLink(which) {
+      if (await copyText(link)) {
+        setCopied(which);
+        setTimeout(() => setCopied((c) => c === which ? null : c), 1600);
+      } else {
+        onToast("Couldn't copy automatically. The link is " + link);
+      }
+    }
     const live = state.klass.status === "live";
     const topic = state.topics.find((t) => t.id === state.klass.current_topic_id);
     const subs = topic ? topic.subtopics || [] : [];
@@ -1376,7 +1512,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       padding: S.x300,
       marginBottom: firstRun ? 0 : S.x250,
       borderRadius: firstRun ? `${R.xl}px ${R.xl}px 0 0` : R.xl
-    } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x300, flexWrap: "wrap", alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 260 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 28, lineHeight: "34px", color: C.ink }) }, state.klass.name), /* @__PURE__ */ !outline && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginTop: S.x025 }) }, topic ? topic.title : "No running order yet"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, alignItems: "center", marginTop: S.x200, flexWrap: "wrap" } }, !firstRun && /* @__PURE__ */ React.createElement(
+    } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x300, flexWrap: "wrap", alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 260 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 28, lineHeight: "34px", color: C.ink }) }, state.klass.name), /* @__PURE__ */ !outline && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginTop: S.x025 }) }, topic ? topic.title : "No running order yet"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, alignItems: "center", marginTop: S.x200, flexWrap: "wrap" } }, !firstRun && onViewSetup && /* @__PURE__ */ React.createElement(Btn, { onClick: onViewSetup }, "View class setup"), !firstRun && /* @__PURE__ */ React.createElement(
       Btn,
       {
         tone: live ? "default" : { background: C.ink, color: C.onInk },
@@ -1386,13 +1522,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         }
       },
       live ? "End the session" : "Start the session"
-    ), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted }) }, state.students.length, " joined"))), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "right" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x050 }) }, "Students join with this code"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x150, justifyContent: "flex-end", marginBottom: S.x150 } }, state.klass.code.split("").map((d, i) => /* @__PURE__ */ React.createElement("span", { key: i, style: { fontSize: 38, lineHeight: "42px", fontWeight: 700, color: C.ink } }, d))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: () => {
-      navigator.clipboard.writeText(link);
-      onToast("Student link copied.");
-    } }, "Copy student link"), /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: () => {
-      navigator.clipboard.writeText(link);
-      onToast("Link copied. Paste it into any QR generator to project it.");
-    } }, "Copy link for QR")))), outline && /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250, paddingTop: S.x200, borderTop: `1px solid ${C.line}` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "baseline", gap: S.x150 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, flexShrink: 0 }) }, "Topic ", topic.ord), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.body), { fontWeight: 700, color: C.ink }) }, topic.title), subs.length === 0 && /* @__PURE__ */ React.createElement(PulseCounts, { up: at(-1, 1), down: at(-1, -1) })), subs.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x100, maxHeight: 240, overflowY: "auto", overscrollBehavior: "contain" } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("div", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x150, padding: `${S.x075}px ${S.x150}px`, borderRadius: R.md, background: C.sunken } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.body), { color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, st), /* @__PURE__ */ React.createElement(PulseCounts, { up: at(idx, 1), down: at(idx, -1) }))))));
+    ), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted }) }, state.students.length, " joined"))), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "right" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x050 }) }, "Students join with this code"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x150, justifyContent: "flex-end", marginBottom: S.x150 } }, state.klass.code.split("").map((d, i) => /* @__PURE__ */ React.createElement("span", { key: i, style: { fontSize: 38, lineHeight: "42px", fontWeight: 700, color: C.ink } }, d))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: () => copyLink("student") }, /* @__PURE__ */ React.createElement(SwapLabel, { on: copied === "student", label: "Copy student link", done: "Copied" })), /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: () => copyLink("qr") }, /* @__PURE__ */ React.createElement(SwapLabel, { on: copied === "qr", label: "Copy link for QR", done: "Copied" }))))), outline && /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250, paddingTop: S.x200, borderTop: `1px solid ${C.line}` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "baseline", gap: S.x150 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.tCurInk, background: C.tCur, borderRadius: 4, padding: "1px 8px", flexShrink: 0 }) }, "Topic ", topic.ord), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.body), { fontWeight: 700, color: C.ink }) }, topic.title), subs.length === 0 && /* @__PURE__ */ React.createElement(PulseCounts, { up: at(-1, 1), down: at(-1, -1) })), subs.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x100, maxHeight: 240, overflowY: "auto", overscrollBehavior: "contain" } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("div", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x150, padding: `${S.x075}px ${S.x150}px`, borderRadius: R.md, background: C.sunken } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.body), { color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, st), /* @__PURE__ */ React.createElement(PulseCounts, { up: at(idx, 1), down: at(idx, -1) }))))));
   }
   const pulseAt = (pulses, topicId, idx, v) => (pulses || []).filter((p) => p.topic_id === topicId && p.subtopic_idx === idx && p.value === v).length;
   const PulseCounts = ({ up, down }) => /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ display: "inline-flex", gap: S.x150, alignItems: "center", flexShrink: 0 }, F.small), {}) }, /* @__PURE__ */ React.createElement("span", { title: "Following this", style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: up ? C.table : C.muted } }, /* @__PURE__ */ React.createElement(ThumbIcon, { color: up ? C.table : C.muted }), " ", up), /* @__PURE__ */ React.createElement("span", { title: "Lost me", style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: down ? C.danger : C.muted } }, /* @__PURE__ */ React.createElement(ThumbIcon, { down: true, color: down ? C.danger : C.muted }), " ", down));
@@ -1417,7 +1547,8 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           style: {
             textAlign: "left",
             width: "100%",
-            border: `1px solid ${on ? C.ink : C.line}`,
+            border: `1px solid ${on ? C.tCur : C.line}`,
+            borderLeft: on ? `8px solid ${C.tCur}` : `1px solid ${C.line}`,
             borderRadius: R.lg,
             background: on ? C.sunken : C.surface,
             padding: `${S.x150}px ${S.x200}px`,
@@ -1433,7 +1564,8 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
   function QuestionRow({ t, anchors, children, strike }) {
     const anchor = anchors.find((a) => a.id === t.anchor_id);
     const who = t.students && t.students.name || t.student_name || "Someone";
-    return /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x250, marginBottom: S.x150 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, alignItems: "center", marginBottom: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, who, " \xB7 ", relTime(t.created_at)), anchor && /* @__PURE__ */ React.createElement(Tag, null, anchor.label)), /* @__PURE__ */ React.createElement("div", { className: "thought", style: {
+    const stripe = t.visibility === "later" ? C.aLater : t.visibility === "table" ? C.aTable : C.aNow;
+    return /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x250, marginBottom: S.x150, borderLeft: `8px solid ${stripe}` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, alignItems: "center", marginBottom: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, who, " \xB7 ", relTime(t.created_at)), anchor && /* @__PURE__ */ React.createElement(Tag, null, anchor.label)), /* @__PURE__ */ React.createElement("div", { className: "thought", style: {
       fontSize: 18,
       lineHeight: "26px",
       color: C.ink,
@@ -1494,8 +1626,8 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         setState(__spreadProps(__spreadValues({ klass: k }, sh), { thoughts, queue, students, pulses }));
         setLoadErr(null);
       } catch (e) {
-        console.error("Say it teacher reload failed", e);
-        setLoadErr(e && e.message ? e.message : "Say it couldn't load the class. Check your connection and reload.");
+        console.error("floorum teacher reload failed", e);
+        setLoadErr(e && e.message ? e.message : "floorum couldn't load the class. Check your connection and reload.");
       }
     }
     useEffect(() => {
@@ -1509,12 +1641,17 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       });
       return () => stop();
     }, [klass]);
+    const goHome = () => {
+      setLoadErr(null);
+      setScreen("courses");
+    };
     if (screen === "courses")
-      return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools }, loadErr && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.danger, background: C.dangerSub, border: `1px solid ${C.line}`, borderRadius: R.lg, padding: `${S.x150}px ${S.x200}px`, marginBottom: S.x200 }) }, loadErr), /* @__PURE__ */ React.createElement(
+      return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools, showStatus: false }, loadErr && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.danger, background: C.dangerSub, border: `1px solid ${C.line}`, borderRadius: R.lg, padding: `${S.x150}px ${S.x200}px`, marginBottom: S.x200 }) }, loadErr), /* @__PURE__ */ React.createElement(
         CoursesHome,
         {
           onStart: () => setScreen("create"),
           openable,
+          savedCode: klass && klass.code,
           onOpen: (k) => {
             LS.set("sayit:teacherClass", k);
             setKlass(k);
@@ -1530,7 +1667,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         }
       ));
     if (screen === "create")
-      return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools }, /* @__PURE__ */ React.createElement(
+      return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools, onHome: goHome }, /* @__PURE__ */ React.createElement(
         CreateClass,
         {
           store,
@@ -1542,7 +1679,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           onBack: () => setScreen("courses")
         }
       ));
-    if (!state) return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools }, /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 460, margin: "40px auto 0" } }, /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: S.x150 } }, /* @__PURE__ */ React.createElement(Spin, { size: 20 })), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 20, lineHeight: "26px", color: C.ink, marginBottom: S.x100 }) }, "Loading your class"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x250 }) }, "If this stays here, Say it can't reach the saved class."), loadErr && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.danger, background: C.dangerSub, borderRadius: R.md, padding: `${S.x150}px ${S.x200}px`, marginBottom: S.x250, textAlign: "left" }) }, loadErr), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, justifyContent: "center" } }, /* @__PURE__ */ React.createElement(Btn, { onClick: () => {
+    if (!state) return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools, onHome: goHome }, /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 460, margin: "40px auto 0" } }, /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: S.x150 } }, /* @__PURE__ */ React.createElement(Spin, { size: 20 })), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 20, lineHeight: "26px", color: C.ink, marginBottom: S.x100 }) }, "Loading your class"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x250 }) }, "If this stays here, floorum can't reach the saved class."), loadErr && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.danger, background: C.dangerSub, borderRadius: R.md, padding: `${S.x150}px ${S.x200}px`, marginBottom: S.x250, textAlign: "left" }) }, loadErr), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, justifyContent: "center" } }, /* @__PURE__ */ React.createElement(Btn, { onClick: () => {
       LS.del("sayit:teacherClass");
       setKlass(null);
       setState(null);
@@ -1555,10 +1692,10 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     const avoided = all.filter((t) => t.status === "avoided");
     const groups = groupSimilar(all.filter((t) => t.status !== "avoided"));
     const anchorOf = (id) => state.anchors.find((a) => a.id === id);
-    const header = /* @__PURE__ */ React.createElement(ClassHeader, { state, store, reload, onToast: setToast, firstRun: screen === "setup" });
+    const header = /* @__PURE__ */ React.createElement(ClassHeader, { state, store, reload, onToast: setToast, firstRun: screen === "setup", onViewSetup: () => setTab("setup") });
     if (screen === "setup") {
       const ready = state.topics.length > 0;
-      return /* @__PURE__ */ React.createElement(FacultyChrome, { status: state.klass.status, tools }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { fontWeight: 600, color: C.muted, letterSpacing: 0.3, marginBottom: S.x100 }) }, "STEP 1 OF 2 \xB7 SET THE CLASS UP"), header, /* @__PURE__ */ React.createElement("div", { style: {
+      return /* @__PURE__ */ React.createElement(FacultyChrome, { status: state.klass.status, tools, onHome: goHome }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { fontWeight: 600, color: C.muted, letterSpacing: 0.3, marginBottom: S.x100 }) }, "STEP 1 OF 2 \xB7 SET THE CLASS UP"), header, /* @__PURE__ */ React.createElement("div", { style: {
         background: C.sunken,
         border: `1px solid ${C.line}`,
         borderTop: "none",
@@ -1585,7 +1722,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         "Start the session"
       ))), /* @__PURE__ */ React.createElement(Toast, { message: toast }));
     }
-    return /* @__PURE__ */ React.createElement(FacultyChrome, { status: state.klass.status, tools }, header, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x300, borderBottom: `1px solid ${C.line}`, marginBottom: S.x250, flexWrap: "wrap" } }, [
+    return /* @__PURE__ */ React.createElement(FacultyChrome, { status: state.klass.status, tools, onHome: goHome }, header, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x300, borderBottom: `1px solid ${C.line}`, marginBottom: S.x250, flexWrap: "wrap" } }, [
       ["live", "Live", live.length],
       ["common", "Common doubts", groups.length],
       ["later", "Later", later.length],
@@ -1609,33 +1746,16 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       },
       lab,
       n > 0 ? " \xB7 " + n : ""
-    )), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        className: "focusable",
-        onClick: () => setTab("setup"),
-        style: __spreadProps(__spreadValues({
-          border: "none",
-          background: "transparent",
-          padding: `0 0 ${S.x100}px`
-        }, F.body), {
-          fontWeight: tab === "setup" ? 700 : 400,
-          color: tab === "setup" ? C.ink : C.muted,
-          borderBottom: `2px solid ${tab === "setup" ? C.ink : "transparent"}`,
-          marginBottom: -1
-        })
-      },
-      "Class setup"
-    )), tab === "live" && /* @__PURE__ */ React.createElement("div", null, live.length === 0 && /* @__PURE__ */ React.createElement(Card, { style: { padding: `${S.x600 || 64}px ${S.x300}px`, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 16, color: C.body }) }, "No questions yet :D")), live.map((t) => {
-      const done = t.status === "addressed" || t.status === "spoken";
+    ))), tab === "live" && /* @__PURE__ */ React.createElement("div", null, live.length === 0 && /* @__PURE__ */ React.createElement(Card, { style: { padding: `${S.x600 || 64}px ${S.x300}px`, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 16, color: C.body }) }, "All seems to be in order, no questions yet :D")), live.map((t) => {
+      const done = t.status === "addressed" || t.status === "spoken" || t.status === "resolved";
       return /* @__PURE__ */ React.createElement(QuestionRow, { key: t.id, t, anchors: state.anchors, strike: done }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Pill, { bg: C.okBg, fg: C.okFg, onClick: async () => {
         await store.status(t.id, "addressed");
         reload();
       } }, done ? "Addressed" : "Mark addressed"), /* @__PURE__ */ React.createElement(
         Pill,
         {
-          bg: C.waitBg,
-          fg: C.waitFg,
+          bg: C.laterSoft,
+          fg: C.ink,
           disabled: done,
           onClick: async () => {
             await store.move(t, "later", state.klass.id);
@@ -1670,8 +1790,8 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       const q = state.queue.find((x) => x.thought_id === t.id) || { status: "pending" };
       const a = anchorOf(t.anchor_id);
       const who = t.students && t.students.name || "Someone";
-      const tone = q.status === "answered" ? { bg: C.okBg, fg: C.okFg } : q.status === "scheduled" ? { bg: C.nowSub, fg: C.now } : { bg: C.neutralBg, fg: C.body };
-      return /* @__PURE__ */ React.createElement(Card, { key: t.id, style: { padding: S.x250, marginBottom: S.x150 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, alignItems: "center", marginBottom: S.x150, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), {
+      const tone = q.status === "answered" ? { bg: C.okBg, fg: C.okFg } : q.status === "scheduled" ? { bg: C.laterSoft, fg: C.ink } : { bg: C.neutralBg, fg: C.body };
+      return /* @__PURE__ */ React.createElement(Card, { key: t.id, style: { padding: S.x250, marginBottom: S.x150, borderLeft: `8px solid ${C.aLater}` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, alignItems: "center", marginBottom: S.x150, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), {
         fontWeight: 600,
         background: tone.bg,
         color: tone.fg,
@@ -2097,7 +2217,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       borderRadius: R.full,
       padding: `${S.x050}px ${S.x100}px`
     }) }, "demo"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => setTheme(theme === "dark" ? "light" : "dark") }, theme === "dark" ? "Light" : "Dark"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => setShowSettings(true) }, aiReady() ? "AI on" : "AI off"));
-    if (CONNECTED && !cloud) return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools }, /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 460, margin: "40px auto 0" } }, /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 20, lineHeight: "26px", color: C.ink, marginBottom: S.x100 }) }, "Can't reach Say it"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.body, marginBottom: S.x150 }) }, conn.reason || "The connection to the class database isn't available."), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x250 }) }, "Check you are online and reload. Nothing you have written has been lost."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", onClick: () => location.reload() }, "Reload"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: resetDevice }, "Reset this device")))));
+    if (CONNECTED && !cloud) return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools }, /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 460, margin: "40px auto 0" } }, /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 20, lineHeight: "26px", color: C.ink, marginBottom: S.x100 }) }, "Can't reach floorum"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.body, marginBottom: S.x150 }) }, conn.reason || "The connection to the class database isn't available."), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x250 }) }, "Check you are online and reload. Nothing you have written has been lost."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", onClick: () => location.reload() }, "Reload"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: resetDevice }, "Reset this device")))));
     return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(TeacherApp, { store, openable: demoClass, tools }), showSettings && /* @__PURE__ */ React.createElement(
       Settings,
       {

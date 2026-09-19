@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#F8F8F8" />
-<title>Say it</title>
+<title>floorum</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; background: #F8F8F8;
@@ -22,6 +22,13 @@
   @media (max-width: 900px) { .split, .split-even { grid-template-columns: 1fr; } }
   .sayit-shell { height: 100vh; }
   @supports (height: 100dvh) { .sayit-shell { height: 100dvh; } }
+  .fl-scroll { scrollbar-width: thin; scrollbar-color: var(--fl-scroll, #ACACAC) transparent; }
+  .fl-scroll::-webkit-scrollbar { width: 6px; }
+  .fl-scroll::-webkit-scrollbar-thumb { background: var(--fl-scroll, #ACACAC); border-radius: 6px; }
+  .fl-scroll::-webkit-scrollbar-track { background: transparent; }
+  .fl-q .fl-tools { opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
+  .fl-q:hover .fl-tools, .fl-q:focus-within .fl-tools { opacity: 1; pointer-events: auto; }
+  @media (hover: none) { .fl-q .fl-tools { opacity: 1; pointer-events: auto; } }
   #boot { max-width: 520px; margin: 60px auto; padding: 24px; background: #fff;
     border: 1px solid #DDDEE1; border-radius: 12px; line-height: 1.6; color: #505258; font-size: 14px; }
 </style>
@@ -428,8 +435,47 @@ try {
     skipBg: "#F6C9C4",
     skipFg: "#AE2E24",
     // avoid
-    shell: "#EDEFEB"
+    shell: "#EDEFEB",
     // page behind the cards
+    logo: "#000000",
+    // the floorum mark
+    // floorum palette, sampled from the design screenshots.
+    // Section boxes, cards, fields: thin neutral lines.
+    flBox: "#E6E6E6",
+    flCard: "#E1E1E1",
+    flField: "#CDCDCD",
+    flSoftField: "#E3E3E3",
+    // Outline: covered, current, next.
+    tPrev: "#CACACA",
+    tPrevInk: "#1A1A1A",
+    tCur: "#70B4DE",
+    tCurInk: "#0E171C",
+    tNext: "#F8F8F8",
+    tNextLine: "#DDDDDD",
+    tNextInk: "#A3A3A3",
+    // Where a question goes: table (yellow), now (green), later (blue).
+    aTable: "#E4CA70",
+    aNow: "#90AB3A",
+    aLater: "#98C9E5",
+    aInk: "#1A1A1A",
+    laterSoft: "#DDEEF8",
+    // Tabs: my table / my questions, and the inactive one.
+    tabTable: "#F0E2AC",
+    tabNow: "#D3DEA8",
+    tabOff: "#D1D2CE",
+    tabInk: "#1A1A1A",
+    // Quiet buttons, the continue button, chips, scrollbar, card tools.
+    flGrey: "#EDEAEA",
+    flGreyInk: "#1A1A1A",
+    flGo: "#ACACAC",
+    flGoInk: "#1A1A1A",
+    chip: "#D9D9D9",
+    chipInk: "#333333",
+    flScroll: "#ACACAC",
+    flTrash: "#E58A86",
+    flPencil: "#B3B3B3",
+    flRing: "#CFCFCF",
+    flInk: "#000000"
   };
   const DARK = {
     paper: "#18191A",
@@ -464,12 +510,57 @@ try {
     waitFg: "#EFDD4E",
     skipBg: "#42221F",
     skipFg: "#FD9891",
-    shell: "#141614"
+    shell: "#141614",
+    logo: "#FFFFFF",
+    flBox: "#2E2F31",
+    flCard: "#34353A",
+    flField: "#45464A",
+    flSoftField: "#3A3B3F",
+    tPrev: "#3A3B3E",
+    tPrevInk: "#D6D6D6",
+    tCur: "#70B4DE",
+    tCurInk: "#0E171C",
+    tNext: "#242528",
+    tNextLine: "#3A3B3F",
+    tNextInk: "#8A8C91",
+    aTable: "#E4CA70",
+    aNow: "#90AB3A",
+    aLater: "#98C9E5",
+    aInk: "#1A1A1A",
+    laterSoft: "#23384A",
+    tabTable: "#4A4226",
+    tabNow: "#394022",
+    tabOff: "#2B2C2F",
+    tabInk: "#E6E6E6",
+    flGrey: "#2F3034",
+    flGreyInk: "#E6E6E6",
+    flGo: "#5A5B5F",
+    flGoInk: "#F2F2F2",
+    chip: "#3A3B3F",
+    chipInk: "#D6D6D6",
+    flScroll: "#5A5B5F",
+    flTrash: "#F08A85",
+    flPencil: "#8A8C91",
+    flRing: "#5A5B5F",
+    flInk: "#FFFFFF"
   };
   const C = __spreadValues({}, LIGHT);
+  // floorum logo, from "floorum logo.svg" (45 x 14). The file's white background
+  // rectangle is dropped and its black is drawn in the theme's logo colour, so the
+  // mark sits on light and dark surfaces alike: "floor" is knocked out of the box
+  // and shows whatever is behind it. The red dot keeps its own colour.
+  const LOGO_PATHS = [
+    ["#FF0000", "M43.7909 10.072C43.5829 10.072 43.4069 9.99998 43.2629 9.85598C43.1189 9.71198 43.0469 9.53598 43.0469 9.32798C43.0469 9.11998 43.1189 8.94398 43.2629 8.79998C43.4069 8.65598 43.5829 8.58398 43.7909 8.58398C43.9909 8.58398 44.1589 8.65598 44.2949 8.79998C44.4389 8.94398 44.5109 9.11998 44.5109 9.32798C44.5109 9.53598 44.4389 9.71198 44.2949 9.85598C44.1589 9.99998 43.9909 10.072 43.7909 10.072Z"],
+    ["ink", "M39.7482 4C40.5642 4 41.2202 4.22454 41.7162 4.67361C42.2202 5.11556 42.4722 5.73571 42.4722 6.53406V10.009H40.7922V6.73721C40.7922 6.27388 40.6602 5.92104 40.3962 5.67868C40.1322 5.42919 39.7722 5.30445 39.3162 5.30445C38.8602 5.30445 38.4962 5.42919 38.2242 5.67868C37.9602 5.92104 37.8282 6.27388 37.8282 6.73721V10.009H36.1482V6.73721C36.1482 6.27388 36.0162 5.92104 35.7522 5.67868C35.4882 5.42919 35.1282 5.30445 34.6722 5.30445C34.2082 5.30445 33.8402 5.42919 33.5682 5.67868C33.3042 5.92104 33.1722 6.27388 33.1722 6.73721V10.009H31.4922V4.08554H33.1722V4.80192C33.3882 4.55243 33.6642 4.35641 34.0002 4.21384C34.3442 4.07128 34.7202 4 35.1282 4C35.6482 4 36.1122 4.09979 36.5202 4.29938C36.9282 4.49184 37.2442 4.76984 37.4682 5.13338C37.6842 4.79123 37.9962 4.51679 38.4042 4.31007C38.8202 4.10336 39.2682 4 39.7482 4Z"],
+    ["ink", "M30.5548 4.08569V10.0092H28.8628V9.26073C28.6468 9.51735 28.3627 9.7205 28.0107 9.87019C27.6667 10.0128 27.2908 10.084 26.8828 10.084C26.3628 10.084 25.9028 9.98781 25.5028 9.79535C25.1028 9.59576 24.7868 9.30707 24.5548 8.92927C24.3308 8.54435 24.2188 8.08815 24.2188 7.56067V4.08569H25.8988V7.34682C25.8988 7.81728 26.0308 8.18082 26.2948 8.43743C26.5588 8.68692 26.9188 8.81166 27.3748 8.81166C27.8388 8.81166 28.2028 8.68692 28.4668 8.43743C28.7308 8.18082 28.8628 7.81728 28.8628 7.34682V4.08569H30.5548Z"],
+    ["ink", "M4.54297 10H5.08301L7 0H21.5C22.6046 0 23.5 0.895431 23.5 2V3.5C23.5 3.5 23.3358 3.48414 22.8799 3.74805C22.4319 4.01204 22.0792 4.3917 21.8232 4.8877L22.0752 3.48438H21.5352L20.3721 10H20.9111L21.584 6.24414C21.728 5.42023 22.0433 4.82778 22.5312 4.46777C23.0193 4.09977 23.5 4 23.5 4V10C23.5 11.1046 22.6046 12 21.5 12H2C1.93839 12 1.87757 11.9957 1.81738 11.9902L3.25488 3.96387H4.94727L5.03125 3.48438H3.33887L3.42285 3.02832C3.51885 2.48435 3.70733 2.09254 3.9873 1.85254C4.2753 1.61254 4.73147 1.49219 5.35547 1.49219L5.43945 1.0127C4.65565 1.0127 4.05936 1.17607 3.65137 1.50391C3.25137 1.83191 2.99109 2.34032 2.87109 3.02832L2.78711 3.48438H0V2C1.28853e-07 0.895431 0.895431 0 2 0H6.45996L4.54297 10ZM0 3.96387H2.70312L1.29883 11.8711C0.54055 11.5868 2.50092e-08 10.8575 0 10V3.96387ZM10.3867 3.40039C9.65885 3.40043 8.99914 3.58422 8.40723 3.95215C7.81523 4.31215 7.35065 4.80374 7.01465 5.42773C6.68667 6.0517 6.52346 6.73182 6.52344 7.46777C6.52344 8.2757 6.76697 8.91571 7.25488 9.3877C7.75082 9.85964 8.40679 10.0956 9.22266 10.0957C9.95066 10.0957 10.6074 9.91566 11.1914 9.55566C11.7831 9.18776 12.2471 8.69205 12.583 8.06836C12.9189 7.44448 13.0869 6.76416 13.0869 6.02832C13.0869 5.49233 12.9713 5.02774 12.7393 4.63574C12.5153 4.23574 12.199 3.93163 11.791 3.72363C11.383 3.50765 10.9147 3.40039 10.3867 3.40039ZM17.4014 3.40039C16.6734 3.40039 16.0129 3.58415 15.4209 3.95215C14.8291 4.31209 14.3652 4.80393 14.0293 5.42773C13.7013 6.0517 13.5371 6.73182 13.5371 7.46777C13.5371 8.27577 13.7815 8.9157 14.2695 9.3877C14.7655 9.85962 15.4214 10.0957 16.2373 10.0957C16.9652 10.0957 17.6211 9.91563 18.2051 9.55566C18.7969 9.18777 19.2607 8.69208 19.5967 8.06836C19.9326 7.44448 20.1015 6.76416 20.1016 6.02832C20.1016 5.49232 19.9849 5.02774 19.7529 4.63574C19.5289 4.23584 19.2126 3.9316 18.8047 3.72363C18.3969 3.50782 17.9291 3.40043 17.4014 3.40039ZM10.3027 3.85547C10.9427 3.85547 11.4754 4.04392 11.8994 4.41992C12.3232 4.79589 12.5351 5.33998 12.5352 6.05176C12.5352 6.69176 12.3952 7.28412 12.1152 7.82812C11.8432 8.37208 11.4589 8.80776 10.9629 9.13574C10.4749 9.46374 9.91892 9.62793 9.29492 9.62793C8.65493 9.62792 8.12321 9.43947 7.69922 9.06348C7.28326 8.68748 7.0752 8.1436 7.0752 7.43164C7.07523 6.79974 7.21144 6.21189 7.4834 5.66797C7.75539 5.11603 8.13508 4.67563 8.62305 4.34766C9.11095 4.01977 9.6709 3.85551 10.3027 3.85547ZM17.3174 3.85547C17.9573 3.85552 18.4891 4.04398 18.9131 4.41992C19.3371 4.7959 19.5488 5.33983 19.5488 6.05176C19.5488 6.69176 19.4089 7.28412 19.1289 7.82812C18.857 8.37187 18.4733 8.80782 17.9775 9.13574C17.4897 9.46366 16.9334 9.62785 16.3096 9.62793C15.6696 9.62793 15.1369 9.43948 14.7129 9.06348C14.2971 8.68749 14.0889 8.14345 14.0889 7.43164C14.0889 6.79977 14.2251 6.21187 14.4971 5.66797C14.769 5.11603 15.1488 4.67565 15.6367 4.34766C16.1247 4.01966 16.6854 3.85547 17.3174 3.85547Z"],
+    ["ink", "M25.248 12.21V12.288H24.496V12.21H25.248ZM25.9633 12.2C25.994 12.112 26.0493 12.04 26.1293 11.984C26.2106 11.928 26.3086 11.9 26.4233 11.9C26.5246 11.9 26.6146 11.9227 26.6933 11.968C26.7733 12.0133 26.8353 12.078 26.8793 12.162C26.9246 12.246 26.9473 12.344 26.9473 12.456C26.9473 12.568 26.9246 12.6667 26.8793 12.752C26.8353 12.836 26.7733 12.9013 26.6933 12.948C26.6146 12.9933 26.5246 13.016 26.4233 13.016C26.31 13.016 26.2126 12.988 26.1313 12.932C26.0513 12.8747 25.9953 12.8027 25.9633 12.716V13.512H25.8733V11.914H25.9633V12.2ZM26.8553 12.456C26.8553 12.3573 26.8366 12.272 26.7993 12.2C26.762 12.128 26.7093 12.0733 26.6413 12.036C26.5746 11.9973 26.4973 11.978 26.4093 11.978C26.3253 11.978 26.2493 11.998 26.1813 12.038C26.1133 12.0767 26.06 12.1327 26.0213 12.206C25.9826 12.278 25.9633 12.3613 25.9633 12.456C25.9633 12.552 25.9826 12.6367 26.0213 12.71C26.06 12.782 26.1133 12.838 26.1813 12.878C26.2493 12.9167 26.3253 12.936 26.4093 12.936C26.4973 12.936 26.5746 12.9167 26.6413 12.878C26.7093 12.8393 26.762 12.784 26.7993 12.712C26.8366 12.64 26.8553 12.5547 26.8553 12.456ZM27.003 12.456C27.003 12.344 27.025 12.246 27.069 12.162C27.1143 12.078 27.1763 12.0133 27.255 11.968C27.335 11.9227 27.4257 11.9 27.527 11.9C27.6417 11.9 27.739 11.928 27.819 11.984C27.899 12.04 27.955 12.1113 27.987 12.198V11.914H28.077V13H27.987V12.714C27.955 12.802 27.8983 12.8747 27.817 12.932C27.737 12.988 27.6403 13.016 27.527 13.016C27.4257 13.016 27.335 12.9933 27.255 12.948C27.1763 12.9013 27.1143 12.836 27.069 12.752C27.025 12.6667 27.003 12.568 27.003 12.456ZM27.987 12.456C27.987 12.3613 27.967 12.278 27.927 12.206C27.8883 12.1327 27.835 12.0767 27.767 12.038C27.699 11.998 27.623 11.978 27.539 11.978C27.451 11.978 27.3737 11.9973 27.307 12.036C27.2403 12.0733 27.1883 12.128 27.151 12.2C27.1137 12.272 27.095 12.3573 27.095 12.456C27.095 12.5547 27.1137 12.64 27.151 12.712C27.1883 12.784 27.2403 12.8393 27.307 12.878C27.375 12.9167 27.4523 12.936 27.539 12.936C27.623 12.936 27.699 12.9167 27.767 12.878C27.8363 12.838 27.8903 12.782 27.929 12.71C27.9677 12.6367 27.987 12.552 27.987 12.456ZM28.3347 12.138C28.3614 12.058 28.4087 11.9973 28.4767 11.956C28.5447 11.9133 28.6314 11.892 28.7367 11.892V11.986H28.7067C28.6 11.986 28.5114 12.0167 28.4407 12.078C28.37 12.138 28.3347 12.2367 28.3347 12.374V13H28.2447V11.914H28.3347V12.138ZM28.9179 11.992V12.71C28.9179 12.79 28.9326 12.8453 28.9619 12.876C28.9913 12.9053 29.0433 12.92 29.1179 12.92H29.2399V13H29.1039C29.0093 13 28.9393 12.978 28.8939 12.934C28.8499 12.8887 28.8279 12.814 28.8279 12.71V11.992H28.6639V11.914H28.8279V11.638H28.9179V11.914H29.2399V11.992H28.9179ZM29.3633 11.672C29.3419 11.672 29.3239 11.6653 29.3093 11.652C29.2946 11.6373 29.2873 11.618 29.2873 11.594C29.2873 11.5713 29.2946 11.5527 29.3093 11.538C29.3239 11.5233 29.3419 11.516 29.3633 11.516C29.3846 11.516 29.4026 11.5233 29.4173 11.538C29.4319 11.5527 29.4393 11.5713 29.4393 11.594C29.4393 11.618 29.4319 11.6373 29.4173 11.652C29.4026 11.6653 29.3846 11.672 29.3633 11.672ZM29.4073 11.914V13H29.3173V11.914H29.4073ZM29.5212 12.456C29.5212 12.3427 29.5432 12.244 29.5872 12.16C29.6325 12.076 29.6945 12.012 29.7732 11.968C29.8532 11.9227 29.9445 11.9 30.0472 11.9C30.1832 11.9 30.2945 11.934 30.3812 12.002C30.4692 12.07 30.5239 12.1613 30.5452 12.276H30.4512C30.4339 12.1827 30.3885 12.1093 30.3152 12.056C30.2432 12.0027 30.1539 11.976 30.0472 11.976C29.9672 11.976 29.8945 11.994 29.8292 12.03C29.7639 12.0647 29.7112 12.1187 29.6712 12.192C29.6325 12.264 29.6132 12.352 29.6132 12.456C29.6132 12.5613 29.6325 12.65 29.6712 12.722C29.7112 12.794 29.7639 12.848 29.8292 12.884C29.8945 12.92 29.9672 12.938 30.0472 12.938C30.1539 12.938 30.2432 12.9113 30.3152 12.858C30.3885 12.8047 30.4339 12.7313 30.4512 12.638H30.5452C30.5239 12.7513 30.4692 12.8427 30.3812 12.912C30.2932 12.9813 30.1819 13.016 30.0472 13.016C29.9445 13.016 29.8532 12.9933 29.7732 12.948C29.6945 12.9027 29.6325 12.838 29.5872 12.754C29.5432 12.6687 29.5212 12.5693 29.5212 12.456ZM30.7054 11.672C30.6841 11.672 30.6661 11.6653 30.6514 11.652C30.6367 11.6373 30.6294 11.618 30.6294 11.594C30.6294 11.5713 30.6367 11.5527 30.6514 11.538C30.6661 11.5233 30.6841 11.516 30.7054 11.516C30.7267 11.516 30.7447 11.5233 30.7594 11.538C30.7741 11.5527 30.7814 11.5713 30.7814 11.594C30.7814 11.618 30.7741 11.6373 30.7594 11.652C30.7447 11.6653 30.7267 11.672 30.7054 11.672ZM30.7494 11.914V13H30.6594V11.914H30.7494ZM31.0093 12.2C31.04 12.112 31.0953 12.04 31.1753 11.984C31.2566 11.928 31.3546 11.9 31.4693 11.9C31.5706 11.9 31.6606 11.9227 31.7393 11.968C31.8193 12.0133 31.8813 12.078 31.9253 12.162C31.9706 12.246 31.9933 12.344 31.9933 12.456C31.9933 12.568 31.9706 12.6667 31.9253 12.752C31.8813 12.836 31.8193 12.9013 31.7393 12.948C31.6606 12.9933 31.5706 13.016 31.4693 13.016C31.356 13.016 31.2586 12.988 31.1773 12.932C31.0973 12.8747 31.0413 12.8027 31.0093 12.716V13.512H30.9193V11.914H31.0093V12.2ZM31.9013 12.456C31.9013 12.3573 31.8826 12.272 31.8453 12.2C31.808 12.128 31.7553 12.0733 31.6873 12.036C31.6206 11.9973 31.5433 11.978 31.4553 11.978C31.3713 11.978 31.2953 11.998 31.2273 12.038C31.1593 12.0767 31.106 12.1327 31.0673 12.206C31.0286 12.278 31.0093 12.3613 31.0093 12.456C31.0093 12.552 31.0286 12.6367 31.0673 12.71C31.106 12.782 31.1593 12.838 31.2273 12.878C31.2953 12.9167 31.3713 12.936 31.4553 12.936C31.5433 12.936 31.6206 12.9167 31.6873 12.878C31.7553 12.8393 31.808 12.784 31.8453 12.712C31.8826 12.64 31.9013 12.5547 31.9013 12.456ZM32.049 12.456C32.049 12.344 32.071 12.246 32.115 12.162C32.1603 12.078 32.2223 12.0133 32.301 11.968C32.381 11.9227 32.4717 11.9 32.573 11.9C32.6877 11.9 32.785 11.928 32.865 11.984C32.945 12.04 33.001 12.1113 33.033 12.198V11.914H33.123V13H33.033V12.714C33.001 12.802 32.9443 12.8747 32.863 12.932C32.783 12.988 32.6863 13.016 32.573 13.016C32.4717 13.016 32.381 12.9933 32.301 12.948C32.2223 12.9013 32.1603 12.836 32.115 12.752C32.071 12.6667 32.049 12.568 32.049 12.456ZM33.033 12.456C33.033 12.3613 33.013 12.278 32.973 12.206C32.9343 12.1327 32.881 12.0767 32.813 12.038C32.745 11.998 32.669 11.978 32.585 11.978C32.497 11.978 32.4197 11.9973 32.353 12.036C32.2863 12.0733 32.2343 12.128 32.197 12.2C32.1597 12.272 32.141 12.3573 32.141 12.456C32.141 12.5547 32.1597 12.64 32.197 12.712C32.2343 12.784 32.2863 12.8393 32.353 12.878C32.421 12.9167 32.4983 12.936 32.585 12.936C32.669 12.936 32.745 12.9167 32.813 12.878C32.8823 12.838 32.9363 12.782 32.975 12.71C33.0137 12.6367 33.033 12.552 33.033 12.456ZM33.4247 11.992V12.71C33.4247 12.79 33.4394 12.8453 33.4687 12.876C33.4981 12.9053 33.5501 12.92 33.6247 12.92H33.7467V13H33.6107C33.5161 13 33.4461 12.978 33.4007 12.934C33.3567 12.8887 33.3347 12.814 33.3347 12.71V11.992H33.1707V11.914H33.3347V11.638H33.4247V11.914H33.7467V11.992H33.4247ZM33.8701 11.672C33.8487 11.672 33.8307 11.6653 33.8161 11.652C33.8014 11.6373 33.7941 11.618 33.7941 11.594C33.7941 11.5713 33.8014 11.5527 33.8161 11.538C33.8307 11.5233 33.8487 11.516 33.8701 11.516C33.8914 11.516 33.9094 11.5233 33.9241 11.538C33.9387 11.5527 33.9461 11.5713 33.9461 11.594C33.9461 11.618 33.9387 11.6373 33.9241 11.652C33.9094 11.6653 33.8914 11.672 33.8701 11.672ZM33.9141 11.914V13H33.8241V11.914H33.9141ZM34.562 13.016C34.4607 13.016 34.3693 12.9933 34.288 12.948C34.2067 12.9027 34.1427 12.838 34.096 12.754C34.0507 12.6687 34.028 12.5693 34.028 12.456C34.028 12.344 34.0513 12.246 34.098 12.162C34.1447 12.0767 34.2087 12.012 34.29 11.968C34.3727 11.9227 34.4647 11.9 34.566 11.9C34.6673 11.9 34.7587 11.9227 34.84 11.968C34.9213 12.012 34.9847 12.076 35.03 12.16C35.0767 12.244 35.1 12.3427 35.1 12.456C35.1 12.5693 35.0767 12.6687 35.03 12.754C34.9833 12.838 34.9187 12.9027 34.836 12.948C34.7547 12.9933 34.6633 13.016 34.562 13.016ZM34.562 12.936C34.6407 12.936 34.714 12.9187 34.782 12.884C34.8513 12.848 34.9067 12.794 34.948 12.722C34.9893 12.65 35.01 12.5613 35.01 12.456C35.01 12.352 34.9893 12.264 34.948 12.192C34.9067 12.12 34.852 12.0667 34.784 12.032C34.716 11.996 34.6427 11.978 34.564 11.978C34.4853 11.978 34.412 11.996 34.344 12.032C34.2773 12.0667 34.2233 12.12 34.182 12.192C34.1407 12.264 34.12 12.352 34.12 12.456C34.12 12.5613 34.14 12.65 34.18 12.722C34.2213 12.794 34.2753 12.848 34.342 12.884C34.41 12.9187 34.4833 12.936 34.562 12.936ZM35.7031 11.892C35.8324 11.892 35.9377 11.932 36.0191 12.012C36.1004 12.0907 36.1411 12.208 36.1411 12.364V13H36.0531V12.37C36.0531 12.2407 36.0204 12.142 35.9551 12.074C35.8897 12.0047 35.8011 11.97 35.6891 11.97C35.5717 11.97 35.4777 12.0073 35.4071 12.082C35.3377 12.1567 35.3031 12.2673 35.3031 12.414V13H35.2131V11.914H35.3031V12.144C35.3337 12.0627 35.3844 12.0007 35.4551 11.958C35.5271 11.914 35.6097 11.892 35.7031 11.892ZM36.7936 12.2C36.8243 12.112 36.8796 12.04 36.9596 11.984C37.0409 11.928 37.1389 11.9 37.2536 11.9C37.3549 11.9 37.4449 11.9227 37.5236 11.968C37.6036 12.0133 37.6656 12.078 37.7096 12.162C37.7549 12.246 37.7776 12.344 37.7776 12.456C37.7776 12.568 37.7549 12.6667 37.7096 12.752C37.6656 12.836 37.6036 12.9013 37.5236 12.948C37.4449 12.9933 37.3549 13.016 37.2536 13.016C37.1403 13.016 37.0429 12.988 36.9616 12.932C36.8816 12.8747 36.8256 12.8027 36.7936 12.716V13.512H36.7036V11.914H36.7936V12.2ZM37.6856 12.456C37.6856 12.3573 37.6669 12.272 37.6296 12.2C37.5923 12.128 37.5396 12.0733 37.4716 12.036C37.4049 11.9973 37.3276 11.978 37.2396 11.978C37.1556 11.978 37.0796 11.998 37.0116 12.038C36.9436 12.0767 36.8903 12.1327 36.8516 12.206C36.8129 12.278 36.7936 12.3613 36.7936 12.456C36.7936 12.552 36.8129 12.6367 36.8516 12.71C36.8903 12.782 36.9436 12.838 37.0116 12.878C37.0796 12.9167 37.1556 12.936 37.2396 12.936C37.3276 12.936 37.4049 12.9167 37.4716 12.878C37.5396 12.8393 37.5923 12.784 37.6296 12.712C37.6669 12.64 37.6856 12.5547 37.6856 12.456ZM37.8333 12.456C37.8333 12.344 37.8553 12.246 37.8993 12.162C37.9446 12.078 38.0066 12.0133 38.0853 11.968C38.1653 11.9227 38.256 11.9 38.3573 11.9C38.472 11.9 38.5693 11.928 38.6493 11.984C38.7293 12.04 38.7853 12.1113 38.8173 12.198V11.914H38.9073V13H38.8173V12.714C38.7853 12.802 38.7286 12.8747 38.6473 12.932C38.5673 12.988 38.4706 13.016 38.3573 13.016C38.256 13.016 38.1653 12.9933 38.0853 12.948C38.0066 12.9013 37.9446 12.836 37.8993 12.752C37.8553 12.6667 37.8333 12.568 37.8333 12.456ZM38.8173 12.456C38.8173 12.3613 38.7973 12.278 38.7573 12.206C38.7186 12.1327 38.6653 12.0767 38.5973 12.038C38.5293 11.998 38.4533 11.978 38.3693 11.978C38.2813 11.978 38.204 11.9973 38.1373 12.036C38.0706 12.0733 38.0186 12.128 37.9813 12.2C37.944 12.272 37.9253 12.3573 37.9253 12.456C37.9253 12.5547 37.944 12.64 37.9813 12.712C38.0186 12.784 38.0706 12.8393 38.1373 12.878C38.2053 12.9167 38.2826 12.936 38.3693 12.936C38.4533 12.936 38.5293 12.9167 38.5973 12.878C38.6666 12.838 38.7206 12.782 38.7593 12.71C38.798 12.6367 38.8173 12.552 38.8173 12.456ZM39.165 12.138C39.1917 12.058 39.239 11.9973 39.307 11.956C39.375 11.9133 39.4617 11.892 39.567 11.892V11.986H39.537C39.4303 11.986 39.3417 12.0167 39.271 12.078C39.2003 12.138 39.165 12.2367 39.165 12.374V13H39.075V11.914H39.165V12.138ZM39.7482 11.992V12.71C39.7482 12.79 39.7629 12.8453 39.7922 12.876C39.8216 12.9053 39.8736 12.92 39.9482 12.92H40.0702V13H39.9342C39.8396 13 39.7696 12.978 39.7242 12.934C39.6802 12.8887 39.6582 12.814 39.6582 12.71V11.992H39.4942V11.914H39.6582V11.638H39.7482V11.914H40.0702V11.992H39.7482ZM40.6376 11.892C40.7669 11.892 40.8723 11.932 40.9536 12.012C41.0349 12.0907 41.0756 12.208 41.0756 12.364V13H40.9876V12.37C40.9876 12.2407 40.9549 12.142 40.8896 12.074C40.8243 12.0047 40.7356 11.97 40.6236 11.97C40.5063 11.97 40.4123 12.0073 40.3416 12.082C40.2723 12.1567 40.2376 12.2673 40.2376 12.414V13H40.1476V11.914H40.2376V12.144C40.2683 12.0627 40.3189 12.0007 40.3896 11.958C40.4616 11.914 40.5443 11.892 40.6376 11.892ZM42.2117 12.384C42.2117 12.432 42.2104 12.468 42.2077 12.492H41.2697C41.2724 12.5893 41.2937 12.6713 41.3337 12.738C41.3737 12.8047 41.4264 12.8547 41.4917 12.888C41.557 12.9213 41.6284 12.938 41.7057 12.938C41.8124 12.938 41.9017 12.912 41.9737 12.86C42.0457 12.8067 42.091 12.7347 42.1097 12.644H42.2037C42.1824 12.7547 42.1277 12.8447 42.0397 12.914C41.9517 12.982 41.8404 13.016 41.7057 13.016C41.6044 13.016 41.5137 12.9933 41.4337 12.948C41.3537 12.9027 41.291 12.838 41.2457 12.754C41.2004 12.6687 41.1777 12.5693 41.1777 12.456C41.1777 12.3427 41.1997 12.244 41.2437 12.16C41.289 12.076 41.3517 12.012 41.4317 11.968C41.5117 11.9227 41.603 11.9 41.7057 11.9C41.8097 11.9 41.8997 11.9227 41.9757 11.968C42.053 12.012 42.1117 12.0713 42.1517 12.146C42.1917 12.2193 42.2117 12.2987 42.2117 12.384ZM42.1217 12.418C42.1257 12.322 42.1084 12.2407 42.0697 12.174C42.0324 12.1073 41.981 12.058 41.9157 12.026C41.8504 11.9927 41.7797 11.976 41.7037 11.976C41.6277 11.976 41.557 11.9927 41.4917 12.026C41.4277 12.058 41.375 12.1073 41.3337 12.174C41.2937 12.2407 41.2724 12.322 41.2697 12.418H42.1217ZM42.4137 12.138C42.4404 12.058 42.4877 11.9973 42.5557 11.956C42.6237 11.9133 42.7104 11.892 42.8157 11.892V11.986H42.7857C42.679 11.986 42.5904 12.0167 42.5197 12.078C42.449 12.138 42.4137 12.2367 42.4137 12.374V13H42.3237V11.914H42.4137V12.138Z"]
+  ];
+  const Logo = ({ height = 32 }) => /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 45 14", height, width: Math.round(height * 45 / 14), role: "img", "aria-label": "floorum", style: { display: "block", flexShrink: 0 } }, LOGO_PATHS.map(([fill, d], i) => /* @__PURE__ */ React.createElement("path", { key: i, d, fill: fill === "ink" ? C.logo : fill })));
   function applyTheme(mode) {
     Object.assign(C, mode === "dark" ? DARK : LIGHT);
     document.body.style.background = C.paper;
+    document.documentElement.style.setProperty("--fl-scroll", C.flScroll);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", C.paper);
   }
@@ -661,7 +752,7 @@ try {
     }
   };
   function resetDevice() {
-    if (!confirm("Reset Say it on this device? This clears the saved sign-in, the class session and local test data. The shared class in Supabase is not touched.")) return;
+    if (!confirm("Reset floorum on this device? This clears the saved sign-in, the class session and local test data. The shared class in Supabase is not touched.")) return;
     ["sayit:role", "sayit:session", "sayit:identity", "sayit:teacherClass", "sayit:solo", "sayit:demo:v3"].forEach(LS.del);
     Object.keys(localStorage).filter((k) => k.startsWith("sayit:private:") || k.startsWith("sayit:notes:") || k.startsWith("sayit:tkey:") || k.startsWith("sayit:pulse:")).forEach((k) => {
       try {
@@ -1156,6 +1247,16 @@ try {
         if (error) throw error;
         return data || [];
       },
+      async editText(id, text) {
+        if (solo) {
+          const d = soloRead();
+          d.thoughts = d.thoughts.map((t) => t.id === id ? __spreadProps(__spreadValues({}, t), { text }) : t);
+          soloWrite(d);
+          return;
+        }
+        const { error } = await sb.from("thoughts").update({ text }).eq("id", id);
+        if (error) throw error;
+      },
       async status(id, status) {
         if (solo) {
           const d = soloRead();
@@ -1307,177 +1408,106 @@ try {
     };
     return api;
   }
-  function QuestionCard({ t, anchors, topics, mine, me, busy, onMove, onRecall, onDelete, onReply, onReact }) {
+  // Delete and "take back" are available for 15 minutes after sending.
+  const RECALL_MS = 15 * 60 * 1e3;
+  const withinRecall = (t) => Date.now() - new Date(t.created_at).getTime() <= RECALL_MS;
+  const DONE = ["spoken", "addressed", "resolved"];
+  // Stripe colour for where a question went: table yellow, now green, later blue.
+  const stripeOf = (v) => v === "table" ? C.aTable : v === "now" ? C.aNow : v === "later" ? C.aLater : C.flCard;
+  const PencilIcon = ({ color }) => /* @__PURE__ */ React.createElement("svg", { width: 15, height: 15, viewBox: "0 0 16 16", "aria-hidden": true }, /* @__PURE__ */ React.createElement("path", { d: "M11.2 2.3a1.5 1.5 0 0 1 2.1 2.1l-8 8L2.5 13.5l1.1-2.8 7.6-8.4Z", fill: "none", stroke: color, strokeWidth: 1.3, strokeLinejoin: "round" }));
+  const TrashIcon = ({ color }) => /* @__PURE__ */ React.createElement("svg", { width: 15, height: 15, viewBox: "0 0 16 16", "aria-hidden": true }, /* @__PURE__ */ React.createElement("path", { d: "M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6c.05.5.45.9.95.9h4.7c.5 0 .9-.4.95-.9l.7-8.6M6.7 7v4.5M9.3 7v4.5", fill: "none", stroke: color, strokeWidth: 1.3, strokeLinecap: "round", strokeLinejoin: "round" }));
+  // Small rounded chip: "+1", "Add a follow up", and the move targets.
+  const Chip = ({ onClick, on, color, disabled, children, title }) => /* @__PURE__ */ React.createElement("button", { className: "focusable", onClick, disabled, title, style: {
+    border: "none",
+    borderRadius: R.full,
+    padding: "2px 9px",
+    fontSize: 11,
+    lineHeight: "16px",
+    fontWeight: 500,
+    background: on ? color || C.aNow : C.chip,
+    color: on ? C.aInk : C.chipInk,
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.5 : 1,
+    whiteSpace: "nowrap"
+  } }, children);
+  function QuestionCard({ t, anchors, topics, mine, me, busy, onMove, onRecall, onDelete, onReply, onReact, onResolve, onEdit, showCircle }) {
+    const h = React.createElement;
     const [open, setOpen] = useState(false);
     const [reply, setReply] = useState("");
     const [posting, setPosting] = useState(false);
     const [confirm2, setConfirm] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(t.text);
     const anchor = anchors.find((a) => a.id === t.anchor_id);
-    // Where in the lecture outline this question sits: the topic it was sent
-    // under, and the anchor if one was pinned. Both come from the existing
-    // topics / anchors data; nothing is duplicated.
+    // Where in the lecture outline this question sits, from the existing
+    // topics / anchors data.
     const topic = (topics || []).find((x) => x.id === (t.topic_id || (anchor && anchor.topic_id)));
     const where = [
       topic ? `Topic ${topic.ord} \xB7 ${topic.title}` : null,
       anchor && (!topic || anchor.label !== topic.title) ? anchor.label : null
-    ].filter(Boolean).join("  \u203A  ");
-    const done = t.status === "spoken" || t.status === "addressed";
+    ].filter(Boolean).join("  ›  ");
+    const done = DONE.includes(t.status);
+    const resolvedByMe = t.status === "resolved";
     const called = t.status === "taking";
     const setAside = t.status === "avoided";
     const replies = t.replies || [];
     const reacted = (t.reacted_by || []).includes(me && me.id);
     const isTable = t.visibility === "table";
     // A thread stays visible once it has follow-ups, even if the question has
-    // since moved off the table. New follow-ups are still only for table
-    // questions, which is where the design offers them.
+    // since moved off the table; new follow-ups are only for table questions.
     const threaded = isTable || replies.length > 0;
-    const tint = mine ? C.nowSub : C.surface;
-    return /* @__PURE__ */ React.createElement("div", { style: {
-      background: tint,
-      border: `1px solid ${called ? C.now : C.line}`,
-      borderWidth: called ? 2 : 1,
-      borderRadius: R.lg,
-      marginBottom: S.x100,
-      overflow: "hidden",
-      transition: `border-color 150ms ${EASE}`
-    } }, /* @__PURE__ */ React.createElement("div", { style: { padding: S.x150 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: {
-      width: 16,
-      height: 16,
-      borderRadius: R.full,
-      flexShrink: 0,
-      marginTop: 2,
-      border: `1.5px solid ${done ? C.table : C.lineBold}`,
-      background: done ? C.table : "transparent",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
-    } }, done && /* @__PURE__ */ React.createElement("span", { style: { color: "#fff", fontSize: 9, lineHeight: 1 } }, "\u2713")), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, where && /* @__PURE__ */ React.createElement("div", { title: where, style: __spreadProps(__spreadValues({}, F.small), { color: C.now, fontWeight: 600, marginBottom: S.x025, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, where), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: done ? C.muted : C.ink, textDecoration: done ? "line-through" : "none" }) }, t.text), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), {
-      color: C.muted,
-      marginTop: S.x050,
-      display: "flex",
-      gap: S.x050,
-      alignItems: "center",
-      flexWrap: "wrap"
-    }) }, /* @__PURE__ */ React.createElement("span", null, mine ? "You" : t.student_name || "Someone"), /* @__PURE__ */ React.createElement("span", null, "\xB7"), /* @__PURE__ */ React.createElement("span", null, relTime(t.created_at)), setAside && /* @__PURE__ */ React.createElement("span", null, "\xB7"), setAside && /* @__PURE__ */ React.createElement("span", null, "set aside for now"))), mine && !confirm2 && /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        className: "focusable",
-        title: "Delete",
-        onClick: () => setConfirm(true),
-        style: {
-          border: "none",
-          background: "transparent",
-          color: C.muted,
-          padding: S.x050,
-          borderRadius: R.md,
-          flexShrink: 0,
-          lineHeight: 1,
-          fontSize: 13
-        }
-      },
-      "\u2715"
-    )), threaded && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: S.x100, marginTop: S.x100 } }, isTable && !mine && /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        className: "focusable",
-        onClick: () => onReact(t, reacted),
-        style: __spreadProps(__spreadValues({
-          border: `1px solid ${reacted ? C.table : C.line}`,
-          borderRadius: R.md,
-          background: reacted ? C.tableSub : "transparent",
-          color: reacted ? C.table : C.body,
-          padding: `${S.x050}px ${S.x100}px`
-        }, F.small), {
-          fontWeight: 500,
-          transition: `background-color 150ms ${EASE}`
-        })
-      },
-      "Same question",
-      t.reaction_count > 0 ? " \xB7 " + t.reaction_count : ""
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        className: "focusable",
-        onClick: () => setOpen(!open),
-        style: __spreadProps(__spreadValues({
-          marginLeft: "auto",
-          border: "none",
-          background: "transparent",
-          color: C.muted
-        }, F.small), {
-          padding: S.x050,
-          display: "flex",
-          alignItems: "center",
-          gap: S.x050
-        })
-      },
-      replies.length ? `${replies.length} follow up${replies.length > 1 ? "s" : ""}` : "Add a follow up",
-      /* @__PURE__ */ React.createElement("span", { style: {
-        display: "inline-block",
-        transform: open ? "rotate(180deg)" : "none",
-        transition: `transform 150ms ${EASE}`,
-        fontSize: 9
-      } }, "\u25BE")
-    ))), threaded && open && /* @__PURE__ */ React.createElement("div", { style: { padding: `0 ${S.x150}px ${S.x150}px`, display: "grid", gap: S.x100 } }, replies.map((r) => /* @__PURE__ */ React.createElement("div", { key: r.id, style: {
-      background: C.surface,
-      border: `1px solid ${C.line}`,
-      borderRadius: R.md,
-      padding: S.x100
-    } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x025 }) }, r.student_name, " \xB7 ", relTime(r.created_at)), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.ink }) }, r.text))), isTable && /* @__PURE__ */ React.createElement(
-      "textarea",
-      {
-        className: "focusable",
-        value: reply,
-        onChange: (e) => setReply(e.target.value),
-        placeholder: "Add a follow up",
-        style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 52, resize: "none" })
-      }
-    ), isTable && reply.trim() && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "primary", disabled: posting, onClick: async () => {
-      setPosting(true);
-      const ok = await onReply(t, reply.trim());
-      setPosting(false);
-      if (ok !== false) setReply("");
-    } }, posting ? "Adding" : "Add it"))), called && /* @__PURE__ */ React.createElement("div", { style: { margin: `0 ${S.x150}px ${S.x150}px`, background: C.now, borderRadius: R.md, padding: S.x150 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.onInk, marginBottom: S.x100 }) }, "The floor is yours"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: { background: C.surface, color: C.now }, onClick: () => onMove(t, "__spoken") }, "I said it")), confirm2 && /* @__PURE__ */ React.createElement("div", { style: { padding: `0 ${S.x150}px ${S.x150}px`, display: "flex", gap: S.x100, alignItems: "center" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.body, marginRight: "auto" }) }, "Delete this?"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "danger", onClick: () => onDelete(t) }, "Delete"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => setConfirm(false) }, "Cancel")), mine && !called && !confirm2 && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", borderTop: `1px solid ${C.line}` } }, Object.values(ACTIONS).map((a, i) => {
-      const on = t.visibility === a.key;
-      return /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          key: a.key,
-          className: "focusable",
-          disabled: busy || on,
-          onClick: () => onMove(t, a.key),
-          style: __spreadProps(__spreadValues({
-            flex: 1,
-            border: "none",
-            borderLeft: i ? `1px solid ${C.line}` : "none",
-            background: on ? actColor(a.key) : "transparent",
-            color: on ? "#FFFFFF" : C.body,
-            padding: `${S.x100}px ${S.x050}px`
-          }, F.small), {
-            fontWeight: on ? 600 : 400,
-            cursor: on ? "default" : "pointer",
-            transition: `background-color 150ms ${EASE}`
-          })
-        },
-        a.label
-      );
-    }), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        className: "focusable",
-        disabled: busy,
-        onClick: () => onRecall(t),
-        title: "Take it back",
-        style: __spreadValues({
-          border: "none",
-          borderLeft: `1px solid ${C.line}`,
-          background: "transparent",
-          color: C.muted,
-          padding: `${S.x100}px ${S.x150}px`
-        }, F.small)
-      },
-      "Unsend"
-    )));
+    const stripe = stripeOf(t.visibility);
+    const recallable = mine && withinRecall(t);
+    const canEdit = mine && !done && !called;
+    // The circle: only on this student's own questions. It marks the question
+    // as no longer needed (status "resolved"), and clears that again.
+    const circle = showCircle && mine && h("button", {
+      className: "focusable",
+      onClick: () => onResolve(t),
+      disabled: busy || called || done && !resolvedByMe,
+      "aria-pressed": done,
+      "aria-label": resolvedByMe ? "Mark as still needed" : done ? "Done" : "Mark as no longer needed",
+      title: resolvedByMe ? "Mark as still needed" : done ? "Done" : "No longer needed",
+      style: { width: 20, height: 20, borderRadius: "50%", flexShrink: 0, padding: 0, border: `1.5px solid ${done ? C.aNow : C.flRing}`, background: done ? C.aNow : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: busy || called || done && !resolvedByMe ? "default" : "pointer" }
+    }, done && h("span", { style: { color: "#FFFFFF", fontSize: 11, lineHeight: 1 } }, "✓"));
+    const tools = mine && !editing && !confirm2 && (canEdit || recallable) && h("div", { className: "fl-tools", style: { position: "absolute", top: 8, right: 8, display: "flex", gap: 2, background: C.surface, borderRadius: R.md } },
+      canEdit && h("button", { className: "focusable", title: "Edit", "aria-label": "Edit", onClick: () => { setDraft(t.text); setEditing(true); }, style: { border: "none", background: "transparent", padding: 5, borderRadius: R.md, display: "flex", cursor: "pointer" } }, h(PencilIcon, { color: C.flPencil })),
+      recallable && h("button", { className: "focusable", title: "Delete", "aria-label": "Delete", onClick: () => setConfirm(true), style: { border: "none", background: "transparent", padding: 5, borderRadius: R.md, display: "flex", cursor: "pointer" } }, h(TrashIcon, { color: C.flTrash })));
+    const chips = (threaded || mine && !done && !called && !editing) && h("div", { style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: S.x100 } },
+      isTable && !mine && h(Chip, { onClick: () => onReact(t, reacted), on: reacted, color: C.aTable, title: "Same question" }, "+1", t.reaction_count > 0 ? " \xB7 " + t.reaction_count : ""),
+      isTable && mine && t.reaction_count > 0 && h("span", { style: { fontSize: 11, lineHeight: "16px", fontWeight: 500, color: C.chipInk, background: C.chip, borderRadius: R.full, padding: "2px 9px" } }, "+", t.reaction_count),
+      threaded && h(Chip, { onClick: () => setOpen(!open), on: open, color: C.flGrey }, replies.length ? `${replies.length} follow up${replies.length > 1 ? "s" : ""}` : "Add a follow up"),
+      mine && !done && !called && !editing && h("div", { className: "fl-tools", style: { display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" } },
+        h("span", { style: { fontSize: 11, color: C.muted } }, "send to"),
+        Object.values(ACTIONS).map((a) => h(Chip, { key: a.key, on: t.visibility === a.key, color: stripeOf(a.key), disabled: busy || t.visibility === a.key, onClick: () => onMove(t, a.key) }, a.key === "table" ? "table" : a.key)),
+        recallable && h(Chip, { disabled: busy, onClick: () => onRecall(t), title: "Take it back into your box" }, "take back")));
+    const thread = threaded && open && h("div", { "data-thread": t.id, style: { marginTop: S.x100, marginLeft: 2, paddingLeft: S.x150, borderLeft: `2px solid ${stripe}`, display: "grid", gap: S.x100 } },
+      replies.map((r) => h("div", { key: r.id }, h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted } }, r.student_name, " \xB7 ", relTime(r.created_at)), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.ink } }, r.text))),
+      isTable && h("textarea", { className: "focusable", value: reply, onChange: (e) => setReply(e.target.value), placeholder: "add a follow up", style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 44, resize: "none", fontSize: 13, borderColor: C.flField, borderRadius: R.lg }) }),
+      isTable && reply.trim() && h("div", null, h(Chip, { on: true, color: C.aTable, disabled: posting, onClick: async () => {
+        setPosting(true);
+        const ok = await onReply(t, reply.trim());
+        setPosting(false);
+        if (ok !== false) setReply("");
+      } }, posting ? "adding" : "add it")));
+    const body = h("div", { style: { flex: 1, minWidth: 0, padding: `${S.x150}px ${S.x150}px ${S.x150}px ${S.x200}px`, position: "relative" } },
+      where && h("div", { title: where, style: { display: "inline-block", maxWidth: "calc(100% - 56px)", fontSize: 11, lineHeight: "16px", fontWeight: 600, color: C.body, background: C.flGrey, borderRadius: R.full, padding: "1px 8px", marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "top" } }, where),
+      editing ? h("div", null,
+        h("textarea", { className: "focusable", value: draft, onChange: (e) => setDraft(e.target.value), autoFocus: true, style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 56, resize: "none", fontSize: 14, borderColor: C.flField, borderRadius: R.lg }) }),
+        h("div", { style: { display: "flex", gap: 6, marginTop: 6 } },
+          h(Chip, { on: true, color: C.aNow, disabled: busy || !draft.trim() || draft.trim() === t.text, onClick: async () => { if (await onEdit(t, draft.trim()) !== false) setEditing(false); } }, "save"),
+          h(Chip, { onClick: () => { setDraft(t.text); setEditing(false); } }, "cancel"))) : h("div", { style: { fontSize: 14, lineHeight: "20px", color: done ? C.muted : C.ink, textDecoration: done ? "line-through" : "none", paddingRight: mine ? 52 : 0 } }, t.text),
+      h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted, marginTop: 4, display: "flex", gap: 4, flexWrap: "wrap" } },
+        h("span", null, mine ? "You" : t.student_name || "Someone"), h("span", null, "\xB7"), h("span", null, relTime(t.created_at)),
+        setAside && h("span", null, "\xB7 set aside for now"), resolvedByMe && h("span", null, "\xB7 no longer needed")),
+      tools, chips, thread,
+      called && h("div", { style: { marginTop: S.x150, background: C.aNow, borderRadius: R.lg, padding: S.x150 } }, h("div", { style: { fontSize: 14, fontWeight: 700, color: C.aInk, marginBottom: S.x100 } }, "The floor is yours"), h(Chip, { on: true, color: "#FFFFFF", onClick: () => onMove(t, "__spoken") }, "I said it")),
+      confirm2 && h("div", { style: { display: "flex", gap: 6, alignItems: "center", marginTop: S.x100 } }, h("span", { style: { fontSize: 12, color: C.body, marginRight: "auto" } }, "Delete this?"), h(Chip, { on: true, color: C.flTrash, onClick: () => onDelete(t) }, "delete"), h(Chip, { onClick: () => setConfirm(false) }, "cancel")));
+    return h("div", { className: "fl-q", tabIndex: 0, style: { display: "flex", alignItems: "center", gap: S.x100, marginBottom: S.x150, outline: "none" } },
+      circle,
+      h("div", { style: { flex: 1, minWidth: 0, display: "flex", border: `1px solid ${called ? C.aNow : C.flCard}`, borderRadius: 10, overflow: "hidden", background: C.surface } },
+        h("div", { style: { width: 8, flexShrink: 0, background: stripe } }),
+        body));
   }
   // Size the in-class outline to exactly three topic rows/cards: the one before
   // the current topic, the current topic, and the next one (or the last three
@@ -1569,6 +1599,10 @@ try {
         };
       };
     }, [me.table_id]);
+    useEffect(() => {
+      const id = setInterval(() => setTick((n) => n + 1), 3e4);
+      return () => clearInterval(id);
+    }, []);
     const curRef = useRef(null);
     const [outlineH, setOutlineH] = useState(null);
     const [viewport, setViewport] = useState("");
@@ -1595,8 +1629,8 @@ try {
       () => !state || dismissed ? [] : suggestAnchors(state.anchors, state.materials, text, state.klass.current_topic_id),
       [state, text, dismissed]
     );
-    if (!state && loadErr) return /* @__PURE__ */ React.createElement("div", { style: { padding: `${S.x600 || 64}px ${S.x250}px` } }, /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 20, lineHeight: "26px", color: C.ink, marginBottom: S.x100 }) }, "Can't open this class"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.body, marginBottom: S.x250 }) }, loadErr), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", onClick: () => refresh() }, "Try again"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: onProfile }, "Profile"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: resetDevice }, "Reset this device"))));
-    if (!state) return /* @__PURE__ */ React.createElement("div", { style: __spreadValues({ padding: S.x300, textAlign: "center", color: C.muted }, F.body) }, /* @__PURE__ */ React.createElement(Spin, null), " Loading");
+    if (!state && loadErr) return React.createElement("div", { style: { padding: "14vh 16px 32px", background: C.surface, minHeight: "100%" } }, React.createElement(Logo, { height: 24 }), React.createElement("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: 16, marginTop: 28 } }, React.createElement("div", { style: { fontSize: 18, lineHeight: "24px", fontWeight: 800, letterSpacing: -0.4, color: C.flInk, marginBottom: 6 } }, "can't open this class"), React.createElement("div", { style: { fontSize: 14, lineHeight: "20px", color: C.body, marginBottom: 16 } }, loadErr), React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } }, [["try again", () => refresh()], ["profile", onProfile], ["reset this device", resetDevice]].map(([l, fn]) => React.createElement("button", { key: l, className: "focusable", onClick: fn, style: { border: "none", borderRadius: 9, background: C.flGrey, color: C.flGreyInk, padding: "9px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" } }, l)))));
+    if (!state) return /* @__PURE__ */ React.createElement("div", { style: { padding: "20vh 16px", textAlign: "center", color: C.muted, fontSize: 14, background: C.surface, minHeight: "100%" } }, /* @__PURE__ */ React.createElement(Spin, null), " loading");
     const topics = state.topics;
     const idx = topics.findIndex((t) => t.id === state.klass.current_topic_id);
     const current = idx >= 0 ? topics[idx] : null;
@@ -1705,6 +1739,31 @@ try {
         setToast({ bad: true, text: "Couldn't delete it." });
       }
     }
+    // The circle on a student's own question: mark it as no longer needed
+    // (status "resolved"), or take that back. Never acts on anyone else's.
+    async function resolveMine(t) {
+      if (t.student_id !== me.id) return;
+      const back = t.visibility === "now" ? "ready" : "captured";
+      try {
+        await store.status(t.id, t.status === "resolved" ? back : "resolved");
+        await refresh();
+        if (me.table_id) setFeed(await store.tableFeed(me.table_id));
+      } catch (e) {
+        setToast({ bad: true, text: "Couldn't update that." });
+      }
+    }
+    async function editMine(t, body) {
+      if (t.student_id !== me.id) return false;
+      try {
+        await store.editText(t.id, body);
+        await refresh();
+        if (me.table_id) setFeed(await store.tableFeed(me.table_id));
+        return true;
+      } catch (e) {
+        setToast({ bad: true, text: "Couldn't save that edit." });
+        return false;
+      }
+    }
     const nameOf = (id) => ((state.students || []).find((s) => s.id === id) || {}).name || "Someone";
     const repliesOn = {};
     (state.replies || []).forEach((r) => {
@@ -1728,34 +1787,42 @@ try {
       }
       setTick((n) => n + 1);
     }
-    // The same pair of buttons in both places, so the two read as one control.
-    const Thumbs = ({ idx, size, topicId, light }) => /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x050, flexShrink: 0 } }, [[1, "Following this"], [-1, "Lost me"]].map(([v, label]) => {
-      const on = myVote(idx, topicId || current && current.id) === v;
-      return /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          key: v,
-          className: "focusable",
-          title: label,
-          "aria-label": label,
-          "aria-pressed": on,
-          onClick: () => setPulse(idx, v, topicId || current && current.id),
-          style: {
-            width: size,
-            height: size,
-            borderRadius: R.md,
-            padding: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: `1px solid ${on ? "transparent" : light ? C.line : C.onInkLine}`,
-            background: on ? light ? C.now : C.onInk : light ? C.surface : "transparent",
-            transition: `background-color 150ms ${EASE}`
-          }
-        },
-        /* @__PURE__ */ React.createElement(ThumbIcon, { down: v === -1, color: on ? light ? C.onInk : C.now : light ? C.body : C.onInk })
-      );
+    const h = React.createElement;
+    // 👍 / 👎 pair: on the blue current-topic pill during class, and on plain
+    // rows in the post-class review ("light").
+    const thumbs = ({ idx, size, topicId, light }) => h("div", { style: { display: "flex", gap: 4, flexShrink: 0 } }, [[1, "Following this"], [-1, "Lost me"]].map(([v, label]) => {
+      const tid = topicId || current && current.id;
+      const on = myVote(idx, tid) === v;
+      return h("button", { key: v, className: "focusable", title: label, "aria-label": label, "aria-pressed": on, onClick: () => setPulse(idx, v, tid), style: {
+        width: size,
+        height: size,
+        borderRadius: R.md,
+        padding: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        border: `1px solid ${on ? "transparent" : light ? C.flField : "rgba(14,23,28,.28)"}`,
+        background: on ? light ? C.flInk : C.tCurInk : light ? C.surface : "transparent",
+        transition: `background-color 150ms ${EASE}`
+      } }, h(ThumbIcon, { down: v === -1, color: on ? light ? C.surface : "#FFFFFF" : light ? C.body : C.tCurInk }));
     }));
+    // A boxed section: "class outline", "ask". Thin line, barely rounded.
+    // A plain function, not a component: a component defined in here would be a
+    // new type on every render, so React would rebuild the box (and lose the
+    // outline's scroll position) each time.
+    const section = (title, ...children) => h("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: `${S.x100}px ${S.x150}px ${S.x150}px`, background: C.surface, flexShrink: 0 } }, title && h("div", { style: { fontSize: 15, lineHeight: "22px", color: C.ink, marginBottom: S.x100 } }, title), ...children);
+    const pill = (tone) => ({
+      borderRadius: 10,
+      padding: "10px 16px",
+      fontSize: 15,
+      lineHeight: "20px",
+      fontWeight: 500,
+      background: tone === "cur" ? C.tCur : tone === "prev" ? C.tPrev : C.tNext,
+      color: tone === "cur" ? C.tCurInk : tone === "prev" ? C.tPrevInk : C.tNextInk,
+      border: `1px solid ${tone === "next" ? C.tNextLine : "transparent"}`
+    });
+    const topicPill = (t, tone) => h("div", { key: t.id, "data-tone": tone, style: __spreadValues({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, pill(tone)) }, t.title);
     // After the faculty ends the session: the whole covered outline, so the
     // student can finish their feedback. "Covered" is every topic up to and
     // including the last current topic; the immediate next and anything later
@@ -1768,260 +1835,122 @@ try {
     const unrated = toRate.filter((r) => myVote(r.i, r.tp.id) === void 0).length;
     const rateRow = (r) => {
       const open = myVote(r.i, r.tp.id) === void 0;
-      return /* @__PURE__ */ React.createElement("div", { key: r.tp.id + ":" + r.i, style: { display: "flex", alignItems: "center", gap: S.x100, padding: `${S.x075}px ${S.x150}px`, borderRadius: R.md, background: open ? C.nowSub : "transparent" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, r.label), open && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.now, fontWeight: 600 }) }, "Not rated yet")), /* @__PURE__ */ React.createElement(Thumbs, { idx: r.i, topicId: r.tp.id, size: 24, light: true }));
+      return h("div", { key: r.tp.id + ":" + r.i, style: { display: "flex", alignItems: "center", gap: S.x150, padding: "10px 12px", borderRadius: 10, background: open ? C.tNext : "transparent", border: `1px solid ${open ? C.tNextLine : "transparent"}` } },
+        h("div", { style: { flex: 1, minWidth: 0 } },
+          h("div", { style: { fontSize: 15, lineHeight: "21px", color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.label),
+          open && h("div", { style: { fontSize: 12, lineHeight: "16px", color: C.now, fontWeight: 600 } }, "Not rated yet")),
+        thumbs({ idx: r.i, topicId: r.tp.id, size: 34, light: true }));
     };
     const reviewList = reviewing ? [
-      /* @__PURE__ */ React.createElement("div", { key: "prompt", style: { position: "sticky", top: -S.x050, zIndex: 1, background: C.sunken, padding: `${S.x100}px ${S.x150}px`, marginBottom: S.x050, borderBottom: `1px solid ${C.line}` } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.ink }) }, "Rate what this class covered"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: unrated ? C.now : C.muted, marginTop: S.x025 }) }, unrated ? `${unrated} of ${toRate.length} still to rate. You can change any answer.` : "All rated. You can still change any answer."))
+      h("div", { key: "prompt", style: { position: "sticky", top: 0, zIndex: 1, background: C.surface, paddingBottom: S.x100, borderBottom: `1px solid ${C.flBox}` } }, h("div", { style: { fontSize: 13, lineHeight: "18px", color: unrated ? C.now : C.muted, fontWeight: unrated ? 600 : 400 } }, unrated ? `${unrated} of ${toRate.length} still to rate. You can change any answer.` : "All rated. You can still change any answer."))
     ].concat(covered.flatMap((tp) => (tp.subtopics || []).length ? [
-      /* @__PURE__ */ React.createElement("div", { key: tp.id + ":h", style: __spreadProps(__spreadValues({}, F.small), { fontWeight: 700, color: C.ink, padding: `${S.x100}px ${S.x150}px ${S.x025}px` }) }, `Topic ${tp.ord} \xB7 ${tp.title}`)
+      h("div", { key: tp.id + ":h", style: { fontSize: 15, lineHeight: "21px", fontWeight: 600, color: C.ink, padding: "8px 2px 0" } }, `Topic ${tp.ord} \xB7 ${tp.title}`)
     ].concat(tp.subtopics.map((s, i) => rateRow({ tp, i, label: s }))) : [rateRow({ tp, i: -1, label: `Topic ${tp.ord} \xB7 ${tp.title}` })])) : null;
-    const TopicRow = ({ t, tone }) => /* @__PURE__ */ React.createElement("div", { style: { padding: `${S.x100}px ${S.x150}px`, display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), {
-      color: C.muted,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap",
-      flex: 1,
-      minWidth: 0
-    }) }, t.title), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, flexShrink: 0 }) }, tone));
-    return /* @__PURE__ */ React.createElement("div", { style: { height: "100%", display: "flex", flexDirection: "column", background: C.paper, minHeight: 0 } }, /* @__PURE__ */ React.createElement("div", { style: {
-      display: "flex",
-      alignItems: "center",
-      gap: S.x100,
-      padding: `${S.x100}px ${S.x150}px`,
-      background: C.surface,
-      borderBottom: `1px solid ${C.line}`,
-      flexShrink: 0
-    } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.hSmall), { color: C.ink }) }, "SayIt"), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }) }, state.klass.name), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        className: "focusable",
-        onClick: onProfile,
-        title: "Profile",
-        style: __spreadProps(__spreadValues({
-          width: 24,
-          height: 24,
-          borderRadius: R.full,
-          border: "none",
-          background: C.neutralBg,
-          color: C.body
-        }, F.small), {
-          fontWeight: 600,
-          flexShrink: 0
-        })
-      },
-      (me.name || "?").slice(0, 1).toUpperCase()
-    )), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: S.x150, gap: S.x150, overflowY: "auto" } }, loadErr && /* @__PURE__ */ React.createElement(Banner, { tone: "bad", title: "Can't reach the class" }, loadErr), current && /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x050, flexShrink: 0, height: !reviewing && outlineH ? outlineH : void 0, maxHeight: "50vh", overflowY: "auto", overscrollBehavior: "contain" } }, reviewing ? reviewList : earlier.map((t) => /* @__PURE__ */ React.createElement(TopicRow, { key: t.id, t, tone: "done" })), !reviewing && current ? /* @__PURE__ */ React.createElement("div", { ref: curRef, style: { background: C.now, borderRadius: R.md, padding: `${S.x100}px ${S.x150}px` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: S.x100 } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hXsmall), { color: C.onInk }) }, current.title)), subs.length === 0 && /* @__PURE__ */ React.createElement(Thumbs, { idx: -1, size: 28 })), subs.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x100 } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("div", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.small), {
-      color: C.onInk,
-      background: C.onInkLine,
-      borderRadius: R.sm,
-      padding: `${S.x025}px ${S.x075}px`
-    }) }, st), /* @__PURE__ */ React.createElement(Thumbs, { idx, size: 24 }))))) : null, !reviewing && next && /* @__PURE__ */ React.createElement(TopicRow, { t: next, tone: "next" })), /* @__PURE__ */ React.createElement(Well, { style: { padding: S.x150, flexShrink: 0 } }, /* @__PURE__ */ React.createElement(
-      "textarea",
-      {
-        ref: boxRef,
-        className: "focusable",
-        value: text,
-        onChange: (e) => {
-          setText(e.target.value);
-          setDismissed(false);
-          setOptions(null);
-          setWordErr(null);
-          if (!e.target.value.trim()) {
-            setAnchorId(null);
-          }
-        },
-        placeholder: "Paste the sentence from your notes",
-        style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 60, maxHeight: 96, resize: "none" })
-      }
-    ), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: S.x100, marginTop: S.x100, minHeight: 24 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, flexShrink: 0 }) }, "Anchor"), ready && chosen ? /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        className: "focusable",
-        onClick: () => {
+    // The current topic: the blue pill, with its subtopics and 👍/👎 inside.
+    const curPill = current && h("div", { ref: curRef, style: pill("cur") },
+      h("div", { style: { display: "flex", alignItems: "center", gap: S.x100 } }, h("div", { style: { flex: 1, minWidth: 0, fontWeight: 600 } }, current.title), subs.length === 0 && thumbs({ idx: -1, size: 26 })),
+      subs.length > 0 && h("div", { style: { display: "grid", gap: 6, marginTop: S.x100 } }, subs.map((st, i) => h("div", { key: st + ":" + i, style: { display: "flex", alignItems: "center", gap: S.x100 } },
+        h("span", { style: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: "18px", fontWeight: 400, color: C.tCurInk, background: "rgba(255,255,255,.35)", borderRadius: 6, padding: "3px 8px" } }, st),
+        thumbs({ idx: i, size: 24 })))));
+    // Outline: sized to three topics by fitOutline, scrolls on its own. The
+    // topic rows must be the scroll box's direct children for that to work.
+    const outline = current && section(reviewing ? "rate what this class covered" : "class outline",
+      h("div", { className: "fl-scroll", "data-outline": "1", style: { display: "grid", gap: S.x100, alignContent: "start", gridAutoRows: "max-content", height: !reviewing && outlineH ? outlineH : void 0, maxHeight: "50vh", overflowY: "auto", overscrollBehavior: "contain", paddingRight: 4 } },
+        reviewing ? reviewList : earlier.map((t) => topicPill(t, "prev")),
+        !reviewing && curPill,
+        !reviewing && next && topicPill(next, "next")));
+    // After the session ends the board is just this: the ask box and the
+    // question tabs step aside so the review is the one thing to do.
+    const reviewBlock = reviewing && h("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: `${S.x250}px ${S.x200}px`, background: C.surface } },
+      h("div", { style: { fontSize: 28, lineHeight: "34px", fontWeight: 800, letterSpacing: -0.9, color: C.flInk } }, "class is over"),
+      h("div", { style: { fontSize: 17, lineHeight: "24px", color: C.ink, marginTop: S.x050 } }, "rate what this class covered"),
+      h("div", { style: { fontSize: 13, lineHeight: "19px", color: C.muted, marginTop: 2, marginBottom: S.x200 } }, "A quick thumbs up or down on each part shows you what to go back over."),
+      h("div", { "data-outline": "1", style: { display: "grid", gap: S.x100 } }, reviewList));
+    const box = (extra) => __spreadValues({ border: `1px solid ${C.flField}`, borderRadius: 12, padding: "8px 12px", fontSize: 13, lineHeight: "18px", textAlign: "left", background: C.surface, color: C.ink }, extra);
+    const ask = section("ask",
+      h("textarea", { ref: boxRef, className: "focusable fl-scroll", value: text, onChange: (e) => {
+        setText(e.target.value);
+        setDismissed(false);
+        setOptions(null);
+        setWordErr(null);
+        if (!e.target.value.trim()) setAnchorId(null);
+      }, placeholder: "paste in your question/thought from notes", style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 64, maxHeight: 96, resize: "none", borderColor: C.flField, borderRadius: 12, fontSize: 14 }) }),
+      h("div", { style: { display: "flex", alignItems: "center", gap: 6, marginTop: S.x100, fontSize: 12, lineHeight: "16px", color: C.ink, minHeight: 18 } },
+        h("span", { style: { flexShrink: 0 } }, "anchor:"),
+        ready && chosen ? h("button", { className: "focusable", title: "Not this one", onClick: () => {
           setDismissed(true);
           setAnchorId(null);
-        },
-        style: __spreadProps(__spreadValues({
-          flex: 1,
-          minWidth: 0,
-          textAlign: "left",
-          border: "none",
-          background: C.nowSub,
-          color: C.now,
-          borderRadius: R.sm,
-          padding: `${S.x025}px ${S.x050}px`
-        }, F.small), {
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap"
-        })
-      },
-      chosen.label
-    ) : /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, ready ? "none found" : "\u2014")), ready && suggestions.length > 1 && !dismissed && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x075 } }, suggestions.slice(1).map((a) => /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        key: a.id,
-        className: "focusable",
-        onClick: () => setAnchorId(a.id),
-        style: __spreadProps(__spreadValues({
-          textAlign: "left",
-          border: `1px solid ${C.line}`,
-          background: C.surface,
-          borderRadius: R.md,
-          padding: `${S.x050}px ${S.x100}px`
-        }, F.small), {
-          color: C.body,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap"
-        })
-      },
-      a.label
-    ))), ready && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, marginTop: S.x150, alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: doWording, disabled: wording }, wording ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { size: 12 }), " Wording") : "Rephrase"), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, display: "grid", gap: S.x050, minWidth: 0 } }, shown.length === 0 && !wording && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, padding: `${S.x050}px 0` }) }, wordErr || "Press Rephrase for two ways to say it."), shown.map((o, i) => {
-      const picked = o === text;
-      return /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          key: i,
-          className: "focusable",
-          onClick: () => {
-            if (!picked) {
-              setOriginal(original || text);
-              setText(o);
-            }
-          },
-          style: __spreadProps(__spreadValues({
-            textAlign: "left",
-            border: `1px solid ${picked ? C.now : C.line}`,
-            background: picked ? C.nowSub : C.surface,
-            color: C.ink,
-            borderRadius: R.md,
-            padding: `${S.x075}px ${S.x100}px`
-          }, F.small), {
-            lineHeight: "18px",
-            transition: `border-color 150ms ${EASE}`
-          })
-        },
-        o
-      );
-    }), shown.length > 0 && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, wordErr ? wordErr : usedAI ? "Worded by AI. Edit anything you like." : "Worked out on this device."), original && /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        className: "focusable",
-        onClick: () => {
-          setText(original);
-          setOriginal(null);
-        },
-        style: __spreadProps(__spreadValues({
-          textAlign: "left",
-          border: "none",
-          background: "transparent",
-          padding: 0
-        }, F.small), {
-          color: C.now,
-          textDecoration: "underline"
-        })
-      },
-      "Put my own words back"
-    ))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, marginTop: S.x150 } }, /* @__PURE__ */ React.createElement(
-      Btn,
-      {
-        compact: true,
-        full: true,
-        disabled: !ready || sending,
-        onClick: () => send("table"),
-        tone: ready ? { background: C.tableSub, color: C.table } : "default"
-      },
-      "Table"
-    ), /* @__PURE__ */ React.createElement(Btn, { compact: true, full: true, disabled: !ready || sending, onClick: () => send("now"), tone: ready ? "primary" : "default" }, "Say now"), /* @__PURE__ */ React.createElement(Btn, { compact: true, full: true, disabled: !ready || sending, onClick: () => send("later") }, "Say later"))), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minHeight: 220, display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React.createElement("div", { style: { flexShrink: 0 } }, /* @__PURE__ */ React.createElement(PanelTabs, { value: pane, onChange: setPane, items: [
-      ["table", "Your table", feed.length],
-      ["mine", "Your questions", mine.length]
-    ] })), /* @__PURE__ */ React.createElement("div", { style: {
-      flex: 1,
-      minHeight: 0,
-      background: C.surface,
-      border: `1px solid ${C.line}`,
-      borderTop: "none",
-      borderRadius: `0 0 ${R.xl}px ${R.xl}px`,
-      overflowY: "auto",
-      padding: S.x150
-    } }, pane === "table" && /* @__PURE__ */ React.createElement("div", null, mates.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: S.x050, marginBottom: S.x150 } }, mates.map((s) => /* @__PURE__ */ React.createElement("span", { key: s.id, style: __spreadProps(__spreadValues({}, F.small), {
-      color: s.id === me.id ? C.ink : C.body,
-      fontWeight: s.id === me.id ? 600 : 400,
-      background: C.neutralBg,
-      borderRadius: R.full,
-      padding: `${S.x025}px ${S.x100}px`
-    }) }, s.id === me.id ? "You" : s.name))), feed.length === 0 ? /* @__PURE__ */ React.createElement(Empty, { title: "Nothing from your table", body: "Share something here to try it on a few people first." }) : feed.map((t) => /* @__PURE__ */ React.createElement(
-      QuestionCard,
-      {
-        key: t.id,
-        t,
-        anchors: state.anchors,
-        topics: state.topics,
-        me,
-        busy: sending,
-        mine: t.student_id === me.id,
-        onMove: move,
-        onRecall: recall,
-        onDelete: del,
-        onReply: addReply,
-        onReact: async (th, on) => {
-          await store.react(th.id, me.id, on);
-          setFeed(await store.tableFeed(me.table_id));
-        }
-      }
-    ))), pane === "mine" && /* @__PURE__ */ React.createElement("div", null, mine.length === 0 ? /* @__PURE__ */ React.createElement(Empty, { title: "Nothing yet", body: "Whatever you send shows up here." }) : mine.map((t) => {
+        }, style: { border: "none", background: "transparent", padding: 0, color: C.ink, fontSize: 12, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0, textDecoration: "underline", textDecorationColor: C.flField } }, chosen.label) : h("span", { style: { color: C.muted } }, ready ? "none found" : "—")),
+      ready && suggestions.length > 1 && !dismissed && h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 } }, suggestions.slice(1).map((a) => h(Chip, { key: a.id, onClick: () => setAnchorId(a.id) }, a.label))),
+      h("div", { style: { display: "flex", gap: 10, marginTop: S.x150, alignItems: "flex-start" } },
+        h("button", { className: "focusable", onClick: doWording, disabled: !ready || wording, style: { border: "none", borderRadius: 10, background: C.flGrey, color: C.flGreyInk, padding: "10px 14px", fontSize: 13, fontWeight: 500, flexShrink: 0, cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.6 } }, wording ? "rephrasing…" : "rephrase it"),
+        h("div", { style: { flex: 1, minWidth: 0, display: "grid", gap: S.x100 } },
+          [0, 1].map((i) => {
+            const o = shown[i];
+            if (!o) return h("div", { key: i, style: box({ color: C.tNextInk }) }, `suggestion ${i + 1}`);
+            const picked = o === text;
+            return h("button", { key: i, className: "focusable", onClick: () => {
+              if (!picked) {
+                setOriginal(original || text);
+                setText(o);
+              }
+            }, style: box({ cursor: "pointer", borderColor: picked ? C.tCur : C.flField, background: picked ? C.tNext : C.surface }) }, o);
+          }),
+          (shown.length > 0 || wordErr || original) && h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted, display: "flex", gap: S.x100, flexWrap: "wrap" } },
+            h("span", null, wordErr || (shown.length ? usedAI ? "worded by AI — edit anything you like" : "worked out on this device" : "")),
+            original && h("button", { className: "focusable", onClick: () => {
+              setText(original);
+              setOriginal(null);
+            }, style: { border: "none", background: "transparent", padding: 0, fontSize: 11, color: C.ink, textDecoration: "underline", cursor: "pointer" } }, "put my own words back")))),
+      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: S.x200 } }, [["table", "share with table", C.aTable], ["now", "send now", C.aNow], ["later", "ask later", C.aLater]].map(([k, lab, bg]) => h("button", { key: k, className: "focusable", disabled: !ready || sending, onClick: () => send(k), style: { border: "none", borderRadius: 10, background: bg, color: C.aInk, padding: "11px 4px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", cursor: ready && !sending ? "pointer" : "default", opacity: ready ? 1 : 0.55 } }, lab))));
+    const empty = (title, body) => h("div", { style: { padding: `${S.x400 || 32}px ${S.x200}px`, textAlign: "center" } }, h("div", { style: { fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 4 } }, title), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.muted } }, body));
+    const card = (t, extra) => h(QuestionCard, __spreadValues({ key: t.id, t, anchors: state.anchors, topics: state.topics, me, busy: sending, mine: t.student_id === me.id, onMove: move, onRecall: recall, onDelete: del, onReply: addReply, onReact: async (th, on) => {
+      await store.react(th.id, me.id, on);
+      setFeed(await store.tableFeed(me.table_id));
+    }, onResolve: resolveMine, onEdit: editMine }, extra));
+    const paneBody = pane === "table" ? h("div", null,
+      mates.length > 0 && h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: S.x150 } }, mates.map((s) => h("span", { key: s.id, style: { fontSize: 11, lineHeight: "16px", fontWeight: s.id === me.id ? 600 : 400, color: C.chipInk, background: C.chip, borderRadius: R.full, padding: "2px 9px" } }, s.id === me.id ? "You" : s.name))),
+      feed.length === 0 ? empty("nothing from your table yet", "share something here to try it on a few people first.") : feed.map((t) => card(t, { showCircle: false }))) : h("div", null, mine.length === 0 ? empty("nothing yet", "whatever you send shows up here.") : mine.map((t) => {
       const q2 = state.queue.find((x) => x.thought_id === t.id);
-      return /* @__PURE__ */ React.createElement("div", { key: t.id }, /* @__PURE__ */ React.createElement(
-        QuestionCard,
-        {
-          t: __spreadProps(__spreadValues({}, t), { replies: repliesOn[t.id] || [] }),
-          anchors: state.anchors,
-          topics: state.topics,
-          me,
-          mine: true,
-          busy: sending,
-          onMove: move,
-          onRecall: recall,
-          onDelete: del,
-          onReply: addReply,
-          onReact: () => {
-          }
-        }
-      ), q2 && q2.response && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({
-        background: C.tableSub,
-        borderRadius: R.md,
-        padding: S.x150,
-        margin: `-4px 0 ${S.x100}px ${S.x200}px`
-      }, F.body), {
-        color: C.ink
-      }) }, q2.response));
-    }))))), /* @__PURE__ */ React.createElement(Toast, { message: toast }));
+      return h("div", { key: t.id }, card(t, { key: void 0, t: __spreadProps(__spreadValues({}, t), { replies: repliesOn[t.id] || [] }), mine: true, showCircle: true }),
+        q2 && q2.response && h("div", { style: { margin: `-4px 0 ${S.x150}px 28px`, paddingLeft: S.x150, borderLeft: `2px solid ${C.aLater}` } }, h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted } }, "answer"), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.ink } }, q2.response)));
+    }));
+    const tabs = [["table", "my table", feed.length, C.tabTable], ["mine", "my questions", mine.length, C.tabNow]];
+    const activeTab = tabs.find((x) => x[0] === pane) || tabs[0];
+    const list = h("div", { style: { flex: 1, minHeight: 220, display: "flex", flexDirection: "column" } },
+      h("div", { style: { display: "flex", gap: 2, flexShrink: 0 } }, tabs.map(([k, lab, n, bg]) => {
+        const on = pane === k;
+        return h("button", { key: k, className: "focusable", onClick: () => setPane(k), style: { flex: 1, border: "none", borderRadius: "10px 10px 0 0", background: on ? bg : C.tabOff, color: C.tabInk, padding: "9px 8px", fontSize: 13, lineHeight: "18px", fontWeight: on ? 600 : 400, cursor: "pointer" } }, lab, n > 0 && h("span", { style: { marginLeft: 6, fontWeight: 700 } }, n));
+      })),
+      h("div", { style: { height: 6, background: activeTab[3], flexShrink: 0 } }),
+      h("div", { className: "fl-scroll", style: { flex: 1, minHeight: 0, overflowY: "auto", padding: `${S.x150}px 2px` } }, paneBody));
+    return h("div", { style: { height: "100%", display: "flex", flexDirection: "column", background: C.surface, minHeight: 0 } },
+      h("div", { style: { display: "flex", alignItems: "center", gap: S.x100, padding: `${S.x150}px ${S.x150}px ${S.x100}px`, flexShrink: 0 } },
+        h(Logo, { height: 24 }),
+        h("span", { style: { fontSize: 12, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginLeft: 4 } }, state.klass.name),
+        h("button", { className: "focusable", onClick: onProfile, title: "Profile", style: { width: 26, height: 26, borderRadius: R.full, border: `1px solid ${C.flBox}`, background: C.surface, color: C.body, fontSize: 12, fontWeight: 600, flexShrink: 0, cursor: "pointer" } }, (me.name || "?").slice(0, 1).toUpperCase())),
+      h("div", { className: "fl-scroll", style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: `0 ${S.x150}px ${S.x150}px`, gap: S.x150, overflowY: "auto" } },
+        loadErr && h(Banner, { tone: "bad", title: "Can't reach the class" }, loadErr),
+        !reviewing && outline, !reviewing && ask, !reviewing && list, reviewBlock),
+      h(Toast, { message: toast }));
   }
+  // Entry-screen pieces, following the "welcome to floorum" design.
+  const flInput = (extra) => __spreadValues({ width: "100%", height: 42, border: `1px solid ${C.flSoftField}`, borderRadius: 9, padding: "0 12px", fontSize: 15, background: C.surface, color: C.ink, outline: "none" }, extra);
+  const FlLabel = ({ label, hint, children }) => /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 14, lineHeight: "20px", fontWeight: 500, color: C.flInk, marginBottom: 6 } }, label), children, hint && /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted, marginTop: 6 } }, hint));
+  const FlButton = ({ disabled, onClick, children, width = 200 }) => /* @__PURE__ */ React.createElement("button", { className: "focusable", disabled, onClick, style: { width, maxWidth: "100%", height: 40, border: "none", borderRadius: 9, background: C.flGo, color: C.flGoInk, fontSize: 15, fontWeight: 500, opacity: disabled ? 0.5 : 1, cursor: disabled ? "default" : "pointer" } }, children);
+  const FlHeading = ({ children }) => /* @__PURE__ */ React.createElement("div", { style: { fontSize: 32, lineHeight: "38px", fontWeight: 800, letterSpacing: -1.1, color: C.flInk, textAlign: "center" } }, children);
   function SignIn({ onDone }) {
+    const h = React.createElement;
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const ok = name.trim().length > 1;
-    return /* @__PURE__ */ React.createElement("div", { style: { padding: `${S.x600 || 64}px ${S.x250}px` } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 26, lineHeight: "32px", color: C.ink, marginBottom: S.x050 }) }, "Welcome"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginBottom: S.x300 }) }, "Just so your teacher knows who's speaking."), /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x250 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x250 } }, /* @__PURE__ */ React.createElement(Field, { label: "Your name", hint: "Shown to your teacher only on questions you choose to send." }, /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        className: "focusable",
-        value: name,
-        onChange: (e) => setName(e.target.value),
-        placeholder: "Anya Chuchra",
-        style: inputStyle(),
-        autoFocus: true
-      }
-    )), /* @__PURE__ */ React.createElement(Field, { label: "College email", hint: "Optional. Kept on this device only \u2014 it is never sent anywhere." }, /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        className: "focusable",
-        value: email,
-        onChange: (e) => setEmail(e.target.value),
-        placeholder: "you@college.edu",
-        style: inputStyle()
-      }
-    ))), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", full: true, disabled: !ok, onClick: () => onDone({ name: name.trim(), email: email.trim() }) }, "Continue"))), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginTop: S.x200, lineHeight: "18px" }) }, "No password. Anything you don't send stays in your own notes, so there's nothing here worth locking."));
+    return h("div", { style: { minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", padding: "18vh 24px 48px", background: C.surface } },
+      h(FlHeading, null, "welcome to"),
+      h("div", { style: { marginTop: 10 } }, h(Logo, { height: 62 })),
+      h("div", { style: { width: "100%", maxWidth: 400, marginTop: 56, display: "grid", gap: 18 } },
+        h(FlLabel, { label: "Your Name" }, h("input", { className: "focusable", value: name, onChange: (e) => setName(e.target.value), autoFocus: true, style: flInput() })),
+        h(FlLabel, { label: "Student Email", hint: "Optional. Kept on this device only — it is never sent anywhere." }, h("input", { className: "focusable", value: email, onChange: (e) => setEmail(e.target.value), inputMode: "email", autoComplete: "email", style: flInput() }))),
+      h("div", { style: { marginTop: 44 } }, h(FlButton, { disabled: !ok, onClick: () => onDone({ name: name.trim(), email: email.trim() }) }, "Continue")));
   }
   const codeFromUrl = () => {
     const d = (new URLSearchParams(location.search).get("c") || "").replace(/\D/g, "");
@@ -2071,9 +2000,12 @@ try {
       prefilled.current = true;
       if (isCode(codeFromUrl())) find(codeFromUrl());
     }, []);
-    return /* @__PURE__ */ React.createElement("div", { style: { padding: `${S.x600 || 64}px ${S.x250}px` } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 26, lineHeight: "32px", color: C.ink, marginBottom: S.x050 }) }, klass ? klass.name : "Join your class"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginBottom: S.x300 }) }, klass ? "Where are you sitting?" : "Enter the code your teacher put on the board."), /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x250 } }, !klass ? /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(Field, { label: "Class code", hint: "Four digits, from your teacher." }, /* @__PURE__ */ React.createElement(
-      "input",
-      {
+    const h = React.createElement;
+    return h("div", { style: { minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", padding: "14vh 24px 48px", background: C.surface } },
+      h(Logo, { height: 34 }),
+      h("div", { style: { marginTop: 36 } }, h(FlHeading, null, klass ? klass.name : "join your class")),
+      h("div", { style: { fontSize: 14, lineHeight: "20px", color: C.muted, marginTop: 8, textAlign: "center" } }, klass ? "where are you sitting?" : "enter the code your teacher put on the board."),
+      h("div", { style: { width: "100%", maxWidth: 400, marginTop: 44 } }, !klass ? h(FlLabel, { label: "Class code", hint: "Four digits, from your teacher." }, h("input", {
         className: "focusable",
         value: code,
         maxLength: 4,
@@ -2082,57 +2014,27 @@ try {
         autoComplete: "off",
         onChange: (e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4)),
         placeholder: "0000",
-        style: __spreadProps(__spreadValues({}, inputStyle()), {
-          fontSize: code.length > 4 ? 26 : 32,
-          lineHeight: "38px",
-          letterSpacing: code.length > 4 ? 8 : 14,
-          textAlign: "center",
-          fontWeight: 700,
-          padding: `${S.x200}px ${S.x150}px`
-        }),
-        autoFocus: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", full: true, disabled: !isCode(code) || busy, onClick: () => find(code) }, busy ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { color: C.onInk, size: 14 }), " Looking") : "Find the class"))) : /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x250 } }, /* @__PURE__ */ React.createElement(Field, { label: "Your table" }, /* @__PURE__ */ React.createElement(
-      "select",
-      {
-        className: "focusable",
-        value: tableId,
-        onChange: (e) => setTableId(e.target.value),
-        style: inputStyle()
-      },
-      tables.map((t) => /* @__PURE__ */ React.createElement("option", { key: t.id, value: t.id }, t.name))
-    )), tables.length === 0 && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, "This class has no tables yet. Ask your teacher to set them up.")), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", full: true, disabled: busy || !tables.some((t) => t.id === tableId), onClick: go }, busy ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { color: C.onInk, size: 14 }), " Joining") : "Join"))), err && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.danger, marginTop: S.x150 }) }, err)), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginTop: S.x200, lineHeight: "18px" }) }, "Your notes and anything you keep to yourself stay on this device and are never sent."));
+        autoFocus: true,
+        style: flInput({ height: 64, fontSize: 32, fontWeight: 700, letterSpacing: 14, textAlign: "center" })
+      })) : h(FlLabel, { label: "Your table", hint: tables.length === 0 ? "This class has no tables yet. Ask your teacher to set them up." : null }, h("select", { className: "focusable", value: tableId, onChange: (e) => setTableId(e.target.value), style: flInput() }, tables.map((t) => h("option", { key: t.id, value: t.id }, t.name))))),
+      err && h("div", { style: { fontSize: 12, lineHeight: "16px", color: C.danger, marginTop: 12, textAlign: "center", maxWidth: 400 } }, err),
+      h("div", { style: { marginTop: 36 } }, !klass ? h(FlButton, { disabled: !isCode(code) || busy, onClick: () => find(code) }, busy ? "looking…" : "find the class") : h(FlButton, { disabled: busy || !tables.some((t) => t.id === tableId), onClick: go }, busy ? "joining…" : "join")));
   }
   function Profile({ identity, session, theme, setTheme, onClose, onLeave }) {
-    return /* @__PURE__ */ React.createElement("div", { style: { padding: `${S.x300}px ${S.x250}px` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: S.x200, marginBottom: S.x250 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({
-      width: 48,
-      height: 48,
-      borderRadius: R.full,
-      background: C.neutralBg,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
-    }, F.hSmall), {
-      color: C.muted
-    }) }, (identity.name || "?").slice(0, 1).toUpperCase()), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 20, lineHeight: "26px", color: C.ink }) }, identity.name)), /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x250 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x200 } }, identity.email && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.body, wordBreak: "break-all" }) }, identity.email), session && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.body }) }, "Class ", session.code, " \xB7 ", session.student.tableName || "no table"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: S.x150 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.body), { color: C.body }) }, "Light"), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        className: "focusable",
-        onClick: () => setTheme(theme === "dark" ? "light" : "dark"),
-        style: {
-          width: 44,
-          height: 24,
-          borderRadius: R.full,
-          border: "none",
-          background: theme === "dark" ? C.now : C.line,
-          padding: 3,
-          display: "flex",
-          justifyContent: theme === "dark" ? "flex-end" : "flex-start",
-          transition: `background-color 150ms ${EASE}`
-        }
-      },
-      /* @__PURE__ */ React.createElement("span", { style: { width: 18, height: 18, borderRadius: R.full, background: C.surface, display: "block" } })
-    ), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.body), { color: C.body }) }, "Dark")))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, marginTop: S.x250 } }, /* @__PURE__ */ React.createElement(Btn, { onClick: onClose }, "Back to class"), /* @__PURE__ */ React.createElement("div", { style: { marginLeft: "auto", display: "flex", gap: S.x100 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: resetDevice }, "Reset this device"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: onLeave }, "Leave the class"))));
+    const h = React.createElement;
+    const row = (label, value) => h("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, padding: "10px 0", borderTop: `1px solid ${C.flBox}`, fontSize: 14, lineHeight: "20px" } }, h("span", { style: { color: C.muted } }, label), h("span", { style: { color: C.ink, textAlign: "right", wordBreak: "break-all" } }, value));
+    const quiet = (label, onClick) => h("button", { className: "focusable", onClick, style: { border: "none", borderRadius: 9, background: C.flGrey, color: C.flGreyInk, padding: "9px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" } }, label);
+    return h("div", { style: { padding: "20px 16px 32px", background: C.surface, minHeight: "100%" } },
+      h(Logo, { height: 24 }),
+      h("div", { style: { display: "flex", alignItems: "center", gap: 12, margin: "28px 0 20px" } },
+        h("div", { style: { width: 44, height: 44, borderRadius: R.full, border: `1px solid ${C.flBox}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: C.body } }, (identity.name || "?").slice(0, 1).toUpperCase()),
+        h("div", { style: { fontSize: 22, lineHeight: "28px", fontWeight: 800, letterSpacing: -0.6, color: C.flInk } }, identity.name)),
+      h("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: "4px 14px" } },
+        identity.email && row("Email", identity.email),
+        session && row("Class", session.code),
+        session && row("Table", session.student.tableName || "no table"),
+        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: identity.email || session ? `1px solid ${C.flBox}` : "none", fontSize: 14 } }, h("span", { style: { color: C.muted } }, "Theme"), h("div", { style: { display: "flex", gap: 6 } }, ["light", "dark"].map((m) => h("button", { key: m, className: "focusable", onClick: () => setTheme(m), style: { border: "none", borderRadius: R.full, padding: "3px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer", background: theme === m ? C.flInk : C.chip, color: theme === m ? C.surface : C.chipInk } }, m))))),
+      h("div", { style: { display: "flex", gap: 8, marginTop: 24, flexWrap: "wrap" } }, quiet("back to class", onClose), h("div", { style: { marginLeft: "auto", display: "flex", gap: 8 } }, quiet("reset this device", resetDevice), quiet("leave the class", onLeave))));
   }
   function Settings({ onClose, onSaved }) {
     const [s, setS] = useState(settings());
@@ -2319,7 +2221,7 @@ try {
     if (!ready) return null;
     const inClass = identity && session;
     let body;
-    if (CONNECTED && !cloud) body = /* @__PURE__ */ React.createElement("div", { style: { padding: `${S.x600 || 64}px ${S.x250}px` } }, /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 20, lineHeight: "26px", color: C.ink, marginBottom: S.x100 }) }, "Can't reach Say it"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.body, marginBottom: S.x150 }) }, conn.reason || "The connection to the class database isn't available."), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x250 }) }, "Check you are online and reload. Nothing you have written has been lost."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", onClick: () => location.reload() }, "Reload"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: resetDevice }, "Reset this device"))));
+    if (CONNECTED && !cloud) body = React.createElement("div", { style: { padding: "14vh 16px 32px", background: C.surface, minHeight: "100%" } }, React.createElement(Logo, { height: 24 }), React.createElement("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: 16, marginTop: 28 } }, React.createElement("div", { style: { fontSize: 18, lineHeight: "24px", fontWeight: 800, letterSpacing: -0.4, color: C.flInk, marginBottom: 6 } }, "can't reach floorum"), React.createElement("div", { style: { fontSize: 14, lineHeight: "20px", color: C.body, marginBottom: 6 } }, conn.reason || "The connection to the class database isn't available."), React.createElement("div", { style: { fontSize: 12, lineHeight: "16px", color: C.muted, marginBottom: 16 } }, "Check you are online and reload. Nothing you have written has been lost."), React.createElement("div", { style: { display: "flex", gap: 8 } }, [["reload", () => location.reload()], ["reset this device", resetDevice]].map(([l, fn]) => React.createElement("button", { key: l, className: "focusable", onClick: fn, style: { border: "none", borderRadius: 9, background: C.flGrey, color: C.flGreyInk, padding: "9px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" } }, l)))));
     else if (!identity) body = /* @__PURE__ */ React.createElement(SignIn, { onDone: (id) => {
       LS.set("sayit:identity", id);
       setIdentity(id);
@@ -2365,7 +2267,7 @@ try {
       width: "100%",
       maxWidth: inClass ? 440 : 520,
       height: "100%",
-      background: C.paper,
+      background: C.surface,
       borderLeft: `1px solid ${C.line}`,
       borderRight: `1px solid ${C.line}`,
       display: "flex",
