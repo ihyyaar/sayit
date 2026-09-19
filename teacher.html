@@ -26,7 +26,23 @@
   .fl-scroll::-webkit-scrollbar-track { background: transparent; }
   .fl-q .fl-tools { opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
   .fl-q:hover .fl-tools, .fl-q:focus-within .fl-tools { opacity: 1; pointer-events: auto; }
-  @media (hover: none) { .fl-q .fl-tools { opacity: 1; pointer-events: auto; } }
+  .fl-cardbtn { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; }
+  @media (hover: none), (pointer: coarse) { .fl-q .fl-tools { opacity: 1; pointer-events: auto; } }
+  /* Hover, pointer devices only (touch never depends on it): a light tint laid
+     over whatever the control's own background is, so filled and transparent
+     controls respond alike; underline tabs darken their label instead. */
+  @media (hover: hover) and (pointer: fine) {
+    button:not(:disabled), select:not(:disabled), a[href] { cursor: pointer; }
+    button:disabled { cursor: default; }
+    button, a[href] { transition: box-shadow 120ms ease, border-color 120ms ease, color 120ms ease; }
+    button:not(:disabled):hover, a[href]:hover { box-shadow: inset 0 0 0 999px var(--fl-hover, rgba(0,0,0,.05)); }
+    [role="tab"]:not(:disabled):hover { box-shadow: none; }
+    [role="tab"][aria-selected="false"]:hover { color: var(--fl-ink, #000) !important; border-bottom-color: var(--fl-hover-line, #ACACAC) !important; }
+    .fl-cardbtn:not(:disabled):hover { box-shadow: none; border-color: var(--fl-hover-line, #ACACAC) !important; }
+    .fl-cardbtn:not(:disabled):hover > div:first-child { filter: var(--fl-hover-filter, brightness(.96)); }
+    .fl-cardbtn.fl-on:hover { border-color: var(--fl-ink, #000) !important; }
+    .fl-q:hover .fl-own { border-color: var(--fl-hover-line, #ACACAC) !important; }
+  }
   #boot { max-width: 520px; margin: 60px auto; padding: 24px; background: #fff;
     border: 1px solid #DDDEE1; border-radius: 12px; line-height: 1.6; color: #505258; font-size: 14px; }
 </style>
@@ -559,6 +575,10 @@ try {
     Object.assign(C, mode === "dark" ? DARK : LIGHT);
     document.body.style.background = C.paper;
     document.documentElement.style.setProperty("--fl-scroll", C.flScroll);
+    document.documentElement.style.setProperty("--fl-hover", mode === "dark" ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.05)");
+    document.documentElement.style.setProperty("--fl-hover-line", C.flScroll);
+    document.documentElement.style.setProperty("--fl-ink", C.ink);
+    document.documentElement.style.setProperty("--fl-hover-filter", mode === "dark" ? "brightness(1.18)" : "brightness(.96)");
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", C.paper);
   }
@@ -1174,6 +1194,34 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         const byId = new Map((roster || []).map((s) => [s.id, s]));
         return (thoughts || []).map((t) => __spreadProps(__spreadValues({}, t), { students: { name: (byId.get(t.student_id) || {}).name || "Someone" } }));
       },
+      // The table discussion behind questions the faculty sees: follow-ups
+      // (replies) and +1s (reactions), both keyed by thought_id. Sending a
+      // table question on to the faculty only changes that thought's
+      // visibility, so its thread stays on the same id. Read-only; chunked so
+      // the id list never makes a long URL.
+      async threads(thoughtIds) {
+        const replies = [], reactions = [];
+        if (solo) {
+          const ids = new Set(thoughtIds);
+          soloRead().thoughts.filter((t) => ids.has(t.id)).forEach((t) => {
+            (t.replies || []).forEach((r) => replies.push(__spreadProps(__spreadValues({}, r), { thought_id: t.id })));
+            (t.reactions || []).forEach((sid) => reactions.push({ thought_id: t.id, student_id: sid, created_at: null }));
+          });
+          return { replies, reactions };
+        }
+        for (let i = 0; i < thoughtIds.length; i += 80) {
+          const ids = thoughtIds.slice(i, i + 80);
+          const [r, x] = await Promise.all([
+            sb.from("replies").select("id,thought_id,student_id,text,created_at").in("thought_id", ids).order("created_at", { ascending: true }),
+            sb.from("reactions").select("thought_id,student_id,created_at").in("thought_id", ids)
+          ]);
+          if (r.error) throw r.error;
+          if (x.error) throw x.error;
+          replies.push(...r.data || []);
+          reactions.push(...x.data || []);
+        }
+        return { replies, reactions };
+      },
       async queue(classId) {
         if (solo) return soloRead().queue;
         const { data, error } = await sb.from("queue").select("*").eq("class_id", classId);
@@ -1317,26 +1365,20 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       color: C.muted
     }) }, "S"), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 15, color: C.ink }) }, "Sachendra Singh Yadav")))), /* @__PURE__ */ React.createElement("main", { style: { maxWidth: 1180, margin: "0 auto", padding: `${S.x300}px ${S.x300}px ${S.x600 || 64}px` } }, children));
   }
-  function CoursesHome({ onStart, openable, onOpen, onOpenCode, savedCode }) {
+  // My Courses: the modules this faculty teaches. The class open on this
+  // device (the one saved as sayit:teacherClass) is reachable from its course
+  // card; if its name matches none of the listed courses it gets a card of
+  // its own, so Home never strands the faculty away from a running class.
+  function CoursesHome({ onStart, openable, onOpen }) {
     const [sem, setSem] = useState("Sem 05");
-    const [code, setCode] = useState(() => isCode(savedCode) ? savedCode : "");
-    const [busy, setBusy] = useState(false);
-    const [err, setErr] = useState(null);
-    async function openByCode() {
-      setBusy(true);
-      setErr(null);
-      try {
-        await onOpenCode(code);
-      } catch (e) {
-        setErr(e.message || "Couldn't open that class.");
-      } finally {
-        setBusy(false);
-      }
-    }
+    const norm = (x) => String(x || "").toLowerCase().replace(/\s*-\s*sec\s*[a-z]$/, "").trim();
+    const ownCard = openable && !COURSES.some((c) => norm(c.name) === norm(openable.name));
     return /* @__PURE__ */ React.createElement("div", { style: { background: C.surface, borderRadius: R.xl, padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 26, lineHeight: "32px", marginBottom: S.x200, color: C.ink }) }, "My Courses"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x300, borderBottom: `1px solid ${C.line}`, marginBottom: S.x300 } }, ["Sem 01", "Sem 02", "Sem 03", "Sem 04", "Sem 05"].map((x) => /* @__PURE__ */ React.createElement(
       "button",
       {
         key: x,
+        role: "tab",
+        "aria-selected": sem === x,
         className: "focusable",
         onClick: () => setSem(x),
         style: __spreadProps(__spreadValues({
@@ -1351,8 +1393,17 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         })
       },
       x
-    ))), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: S.x200 } }, COURSES.map((c) => {
-      const norm = (x) => x.toLowerCase().replace(/\s*-\s*sec\s*[a-z]$/, "").trim();
+    ))), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: S.x200 } }, ownCard && /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: "open-class",
+        className: "focusable fl-cardbtn fl-on",
+        onClick: () => onOpen(openable),
+        style: { border: `1px solid ${C.ink}`, borderRadius: R.lg, overflow: "hidden", background: C.surface, padding: 0, textAlign: "left" }
+      },
+      /* @__PURE__ */ React.createElement("div", { style: { height: 110, background: C.sunken, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "flex-start", justifyContent: "flex-end", padding: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { fontWeight: 700, background: C.surface, color: C.live, borderRadius: R.sm, padding: `${S.x025}px ${S.x075}px` }) }, "OPEN")),
+      /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({ padding: S.x150 }, F.body), { color: C.ink }) }, openable.name)
+    ), COURSES.map((c) => {
       const live = openable && norm(c.name) === norm(openable.name);
       const card = /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: {
         height: 110,
@@ -1372,7 +1423,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         "button",
         {
           key: c.id,
-          className: "focusable",
+          className: "focusable fl-cardbtn fl-on",
           onClick: () => onOpen(openable),
           style: {
             border: `1px solid ${C.ink}`,
@@ -1394,7 +1445,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     }), /* @__PURE__ */ React.createElement(
       "button",
       {
-        className: "focusable",
+        className: "focusable fl-cardbtn",
         onClick: onStart,
         style: {
           border: `1px solid ${C.line}`,
@@ -1407,20 +1458,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       },
       /* @__PURE__ */ React.createElement("div", { style: { height: 110, background: C.sunken, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 30, color: C.ink, lineHeight: 1 } }, "+")),
       /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({ padding: S.x150 }, F.body), { color: C.ink }) }, "Start a new course")
-    )), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x300, display: "flex", alignItems: "flex-end", gap: S.x200, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Btn, null, "View all courses (", COURSES.length, ")"), /* @__PURE__ */ React.createElement("div", { style: { marginLeft: "auto", display: "flex", alignItems: "flex-end", gap: S.x100 } }, /* @__PURE__ */ React.createElement(Field, { label: "Open a class you already made" }, /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        className: "focusable",
-        value: code,
-        maxLength: 4,
-        inputMode: "numeric",
-        pattern: "[0-9]*",
-        autoComplete: "off",
-        onChange: (e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4)),
-        placeholder: "0000",
-        style: __spreadProps(__spreadValues({}, inputStyle()), { width: 150, letterSpacing: 4, textAlign: "center", fontWeight: 700 })
-      }
-    )), /* @__PURE__ */ React.createElement(Btn, { disabled: !isCode(code) || busy, onClick: openByCode }, busy ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Spin, { size: 14 }), " Opening") : "Open it"))), err && /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.danger, marginTop: S.x100, textAlign: "right" }) }, err));
+    )), /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x300, display: "flex", alignItems: "flex-end", gap: S.x200, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Btn, null, "View all courses (", COURSES.length, ")")));
   }
   function CreateClass({ store, onCreated, onBack }) {
     const [name, setName] = useState("");
@@ -1504,6 +1542,9 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     const topic = state.topics.find((t) => t.id === state.klass.current_topic_id);
     const subs = topic ? topic.subtopics || [] : [];
     const at = (idx, v) => topic ? pulseAt(state.pulses, topic.id, idx, v) : 0;
+    // Topic feedback is collected after class, so its counts are shown only
+    // once the session has ended.
+    const showPulse = state.klass.status === "ended";
     // On the live board the current topic moves into the outline block below,
     // with its understanding beside it. The setup screen keeps the plain title
     // line, since the running order is shown right underneath it there.
@@ -1522,11 +1563,12 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         }
       },
       live ? "End the session" : "Start the session"
-    ), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted }) }, state.students.length, " joined"))), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "right" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x050 }) }, "Students join with this code"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x150, justifyContent: "flex-end", marginBottom: S.x150 } }, state.klass.code.split("").map((d, i) => /* @__PURE__ */ React.createElement("span", { key: i, style: { fontSize: 38, lineHeight: "42px", fontWeight: 700, color: C.ink } }, d))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: () => copyLink("student") }, /* @__PURE__ */ React.createElement(SwapLabel, { on: copied === "student", label: "Copy student link", done: "Copied" })), /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: () => copyLink("qr") }, /* @__PURE__ */ React.createElement(SwapLabel, { on: copied === "qr", label: "Copy link for QR", done: "Copied" }))))), outline && /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250, paddingTop: S.x200, borderTop: `1px solid ${C.line}` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "baseline", gap: S.x150 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.tCurInk, background: C.tCur, borderRadius: 4, padding: "1px 8px", flexShrink: 0 }) }, "Topic ", topic.ord), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.body), { fontWeight: 700, color: C.ink }) }, topic.title), subs.length === 0 && /* @__PURE__ */ React.createElement(PulseCounts, { up: at(-1, 1), down: at(-1, -1) })), subs.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x100, maxHeight: 240, overflowY: "auto", overscrollBehavior: "contain" } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("div", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x150, padding: `${S.x075}px ${S.x150}px`, borderRadius: R.md, background: C.sunken } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.body), { color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, st), /* @__PURE__ */ React.createElement(PulseCounts, { up: at(idx, 1), down: at(idx, -1) }))))));
+    ), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted }) }, state.students.length, " joined"))), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "right" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x050 }) }, "Students join with this code"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x150, justifyContent: "flex-end", marginBottom: S.x150 } }, state.klass.code.split("").map((d, i) => /* @__PURE__ */ React.createElement("span", { key: i, style: { fontSize: 38, lineHeight: "42px", fontWeight: 700, color: C.ink } }, d))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: () => copyLink("student") }, /* @__PURE__ */ React.createElement(SwapLabel, { on: copied === "student", label: "Copy student link", done: "Copied" })), /* @__PURE__ */ React.createElement(Btn, { compact: true, onClick: () => copyLink("qr") }, /* @__PURE__ */ React.createElement(SwapLabel, { on: copied === "qr", label: "Copy link for QR", done: "Copied" }))))), outline && /* @__PURE__ */ React.createElement("div", { style: { marginTop: S.x250, paddingTop: S.x200, borderTop: `1px solid ${C.line}` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "baseline", gap: S.x150 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.tCurInk, background: C.tCur, borderRadius: 4, padding: "1px 8px", flexShrink: 0 }) }, "Topic ", topic.ord), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.body), { fontWeight: 700, color: C.ink }) }, topic.title), subs.length === 0 && showPulse && /* @__PURE__ */ React.createElement(PulseCounts, { up: at(-1, 1), down: at(-1, -1) })), subs.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x050, marginTop: S.x100, maxHeight: 240, overflowY: "auto", overscrollBehavior: "contain" } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("div", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x150, padding: `${S.x075}px ${S.x150}px`, borderRadius: R.md, background: C.sunken } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.body), { color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, st), showPulse && /* @__PURE__ */ React.createElement(PulseCounts, { up: at(idx, 1), down: at(idx, -1) }))))));
   }
   const pulseAt = (pulses, topicId, idx, v) => (pulses || []).filter((p) => p.topic_id === topicId && p.subtopic_idx === idx && p.value === v).length;
   const PulseCounts = ({ up, down }) => /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ display: "inline-flex", gap: S.x150, alignItems: "center", flexShrink: 0 }, F.small), {}) }, /* @__PURE__ */ React.createElement("span", { title: "Following this", style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: up ? C.table : C.muted } }, /* @__PURE__ */ React.createElement(ThumbIcon, { color: up ? C.table : C.muted }), " ", up), /* @__PURE__ */ React.createElement("span", { title: "Lost me", style: { display: "inline-flex", gap: S.x050, alignItems: "center", color: down ? C.danger : C.muted } }, /* @__PURE__ */ React.createElement(ThumbIcon, { down: true, color: down ? C.danger : C.muted }), " ", down));
   function RunningOrder({ state, store, reload }) {
+    const showPulse = state.klass.status === "ended";
     return /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { color: C.ink }) }, "The running order"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.muted, marginTop: S.x025, marginBottom: S.x200 }) }, state.topics.length ? "Tap one to put it on now." : "Nothing yet. Add the deck you're teaching from and the class builds itself."), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: S.x100 } }, state.topics.map((tp) => {
       const on = tp.id === state.klass.current_topic_id;
       const n = state.anchors.filter((a) => a.topic_id === tp.id).length;
@@ -1555,13 +1597,13 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
             display: "block"
           }
         },
-        /* @__PURE__ */ React.createElement("span", { style: { display: "flex", gap: S.x150, alignItems: "baseline" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, tp.ord), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1 }, F.body), { fontWeight: on ? 700 : 400, color: C.ink }) }, tp.title), !on && (totalUp > 0 || totalDown > 0) && /* @__PURE__ */ React.createElement(PulseCounts, { up: totalUp, down: totalDown }), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, n, " anchor", n === 1 ? "" : "s")),
-        on && subs.length > 0 && /* @__PURE__ */ React.createElement("span", { style: { display: "grid", gap: S.x050, marginTop: S.x100, paddingLeft: 20 } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("span", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.small), { color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, st), /* @__PURE__ */ React.createElement(PulseCounts, { up: countAt(idx, 1), down: countAt(idx, -1) })))),
-        on && subs.length === 0 && (totalUp > 0 || totalDown > 0) && /* @__PURE__ */ React.createElement("span", { style: { display: "flex", marginTop: S.x100, paddingLeft: 20 } }, /* @__PURE__ */ React.createElement(PulseCounts, { up: totalUp, down: totalDown }))
+        /* @__PURE__ */ React.createElement("span", { style: { display: "flex", gap: S.x150, alignItems: "baseline" } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, tp.ord), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1 }, F.body), { fontWeight: on ? 700 : 400, color: C.ink }) }, tp.title), showPulse && !on && (totalUp > 0 || totalDown > 0) && /* @__PURE__ */ React.createElement(PulseCounts, { up: totalUp, down: totalDown }), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted }) }, n, " anchor", n === 1 ? "" : "s")),
+        on && subs.length > 0 && /* @__PURE__ */ React.createElement("span", { style: { display: "grid", gap: S.x050, marginTop: S.x100, paddingLeft: 20 } }, subs.map((st, idx) => /* @__PURE__ */ React.createElement("span", { key: st + ":" + idx, style: { display: "flex", alignItems: "center", gap: S.x100 } }, /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ flex: 1, minWidth: 0 }, F.small), { color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }, st), showPulse && /* @__PURE__ */ React.createElement(PulseCounts, { up: countAt(idx, 1), down: countAt(idx, -1) })))),
+        showPulse && on && subs.length === 0 && (totalUp > 0 || totalDown > 0) && /* @__PURE__ */ React.createElement("span", { style: { display: "flex", marginTop: S.x100, paddingLeft: 20 } }, showPulse && /* @__PURE__ */ React.createElement(PulseCounts, { up: totalUp, down: totalDown }))
       );
     })));
   }
-  function QuestionRow({ t, anchors, children, strike }) {
+  function QuestionRow({ t, anchors, children, strike, thread }) {
     const anchor = anchors.find((a) => a.id === t.anchor_id);
     const who = t.students && t.students.name || t.student_name || "Someone";
     const stripe = t.visibility === "later" ? C.aLater : t.visibility === "table" ? C.aTable : C.aNow;
@@ -1571,7 +1613,42 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       color: C.ink,
       textDecoration: strike ? "line-through" : "none",
       marginBottom: S.x200
-    } }, t.text), children);
+    } }, t.text), thread, children);
+  }
+  // The table discussion that led to a question, seen from the faculty side:
+  // the same 2px thread line the students see under it at their table. The
+  // card's own text is the original question; below it, in the order they
+  // happened, each follow-up (with its author, as the table sees it) and each
+  // run of +1s (a count only; students never see who +1'd either), then the
+  // step that sent it to the faculty. Nothing is shown for a question that
+  // never had a table discussion.
+  function FacultyThread({ t, state }) {
+    const h = React.createElement;
+    const replies = (state.replies || []).filter((r) => r.thought_id === t.id);
+    const plus = (state.reactions || []).filter((x) => x.thought_id === t.id);
+    if (!replies.length && !plus.length) return null;
+    const at = (x) => x.created_at ? new Date(x.created_at).getTime() : 0;
+    const nameOf = (r) => r.student_name || ((state.students || []).find((s) => s.id === r.student_id) || {}).name || "Someone";
+    const rows = [];
+    [...replies.map((r) => ({ kind: "reply", at: at(r), r })), ...plus.map((x) => ({ kind: "plus", at: at(x) }))].sort((a, b) => a.at - b.at).forEach((e) => {
+      const last = rows[rows.length - 1];
+      if (e.kind === "plus" && last && last.kind === "plus") last.n += 1;
+      else rows.push(e.kind === "plus" ? { kind: "plus", n: 1 } : e);
+    });
+    const table = (state.tables || []).find((x) => x.id === t.table_id);
+    const who = t.students && t.students.name || "Someone";
+    const later = t.visibility === "later";
+    const line = later ? C.aLater : C.aNow;
+    const chip = (text, bg, fg = C.aInk) => h("span", { style: { display: "inline-block", fontSize: 11, lineHeight: "16px", fontWeight: 600, color: fg, background: bg, borderRadius: R.full, padding: "1px 8px", marginRight: 6 } }, text);
+    const meta = __spreadProps(__spreadValues({}, F.small), { color: C.muted });
+    return h("div", { "data-fthread": t.id, style: { marginBottom: S.x200 } },
+      h("div", { style: __spreadProps(__spreadValues({}, meta), { marginBottom: S.x100 }) }, "\u2191 original question \u00B7 discussed at ", table ? table.name : "the table", " before it reached you"),
+      h("div", { style: { marginLeft: 2, paddingLeft: S.x150, borderLeft: `2px solid ${line}`, display: "grid", gap: S.x100 } },
+        rows.map((e, i) => e.kind === "reply" ? h("div", { key: e.r.id || "r" + i, "data-kind": "follow-up" },
+          h("div", { style: meta }, chip("follow-up", C.chip, C.chipInk), nameOf(e.r), e.r.created_at ? " \u00B7 " + relTime(e.r.created_at) : ""),
+          h("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.ink, marginTop: 2 }) }, e.r.text)
+        ) : h("div", { key: "p" + i, "data-kind": "plus-one", style: meta }, chip("+1", C.aTable), e.n === 1 ? "1 tablemate had the same question" : `${e.n} tablemates had the same question`)),
+        h("div", { key: "sent", "data-kind": "escalation", style: meta }, chip(later ? "for after class" : "sent to you", line), who, later ? " sent it for after class" : " sent it to you from the table")));
   }
   const Pill = ({ bg, fg, on, disabled, onClick, children }) => /* @__PURE__ */ React.createElement(
     "button",
@@ -1618,12 +1695,14 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
           setKlass(null);
           setState(null);
           setScreen("courses");
-          setLoadErr("That class no longer exists. Open another one by code, or start a new class.");
+          setLoadErr("That class no longer exists. Start a new course to set up another one.");
           return;
         }
         const sh = await store.shape(k.id);
         const [thoughts, queue, students, pulses] = await Promise.all([store.classThoughts(k.id), store.queue(k.id), store.students(k.id), store.pulses(k.id)]);
-        setState(__spreadProps(__spreadValues({ klass: k }, sh), { thoughts, queue, students, pulses }));
+        const sent = thoughts.filter((t) => t.visibility !== "table").map((t) => t.id);
+        const { replies, reactions } = sent.length ? await store.threads(sent) : { replies: [], reactions: [] };
+        setState(__spreadProps(__spreadValues({ klass: k }, sh), { thoughts, queue, students, pulses, replies, reactions }));
         setLoadErr(null);
       } catch (e) {
         console.error("floorum teacher reload failed", e);
@@ -1650,16 +1729,8 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         CoursesHome,
         {
           onStart: () => setScreen("create"),
-          openable,
-          savedCode: klass && klass.code,
+          openable: openable || klass,
           onOpen: (k) => {
-            LS.set("sayit:teacherClass", k);
-            setKlass(k);
-            setScreen("board");
-          },
-          onOpenCode: async (c) => {
-            const k = await store.getClass(c);
-            if (!k) throw new Error("No class with that code.");
             LS.set("sayit:teacherClass", k);
             setKlass(k);
             setScreen("board");
@@ -1731,7 +1802,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       "button",
       {
         key: k,
-        className: "focusable",
+        role: "tab", "aria-selected": tab === k, className: "focusable",
         onClick: () => setTab(k),
         style: __spreadProps(__spreadValues({
           border: "none",
@@ -1748,7 +1819,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       n > 0 ? " \xB7 " + n : ""
     ))), tab === "live" && /* @__PURE__ */ React.createElement("div", null, live.length === 0 && /* @__PURE__ */ React.createElement(Card, { style: { padding: `${S.x600 || 64}px ${S.x300}px`, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 16, color: C.body }) }, "All seems to be in order, no questions yet :D")), live.map((t) => {
       const done = t.status === "addressed" || t.status === "spoken" || t.status === "resolved";
-      return /* @__PURE__ */ React.createElement(QuestionRow, { key: t.id, t, anchors: state.anchors, strike: done }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Pill, { bg: C.okBg, fg: C.okFg, onClick: async () => {
+      return /* @__PURE__ */ React.createElement(QuestionRow, { key: t.id, t, anchors: state.anchors, strike: done, thread: /* @__PURE__ */ React.createElement(FacultyThread, { t, state }) }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Pill, { bg: C.okBg, fg: C.okFg, onClick: async () => {
         await store.status(t.id, "addressed");
         reload();
       } }, done ? "Addressed" : "Mark addressed"), /* @__PURE__ */ React.createElement(
@@ -1797,7 +1868,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         color: tone.fg,
         borderRadius: R.full,
         padding: `${S.x025}px ${S.x100}px`
-      }) }, q.status), a && /* @__PURE__ */ React.createElement(Tag, null, a.label), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ marginLeft: "auto" }, F.small), { color: C.muted }) }, who, " \xB7 ", relTime(t.created_at))), /* @__PURE__ */ React.createElement("div", { className: "thought", style: { fontSize: 18, lineHeight: "26px", color: C.ink, marginBottom: S.x200 } }, t.text), q.status === "pending" && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(
+      }) }, q.status), a && /* @__PURE__ */ React.createElement(Tag, null, a.label), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ marginLeft: "auto" }, F.small), { color: C.muted }) }, who, " \xB7 ", relTime(t.created_at))), /* @__PURE__ */ React.createElement("div", { className: "thought", style: { fontSize: 18, lineHeight: "26px", color: C.ink, marginBottom: S.x200 } }, t.text), /* @__PURE__ */ React.createElement(FacultyThread, { t, state }), q.status === "pending" && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(
         Pill,
         {
           bg: C.now,
@@ -1840,7 +1911,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         },
         "Mark answered"
       ))), q.status === "answered" && q.response && /* @__PURE__ */ React.createElement("div", { style: __spreadValues({ background: C.okBg, color: C.ink, borderRadius: R.lg, padding: S.x200 }, F.body) }, q.response));
-    })), tab === "setup" && /* @__PURE__ */ React.createElement("div", { className: "split-even" }, /* @__PURE__ */ React.createElement(RunningOrder, { state, store, reload }), /* @__PURE__ */ React.createElement(DeckPanel, { state, store, reload })), tab === "avoided" && /* @__PURE__ */ React.createElement("div", null, avoided.length === 0 && /* @__PURE__ */ React.createElement(Card, { style: { padding: `${S.x600 || 64}px ${S.x300}px`, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 16, color: C.body }) }, "Nothing set aside")), avoided.map((t) => /* @__PURE__ */ React.createElement(QuestionRow, { key: t.id, t, anchors: state.anchors }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Pill, { bg: C.neutralBg, fg: C.ink, onClick: async () => {
+    })), tab === "setup" && /* @__PURE__ */ React.createElement("div", { className: "split-even" }, /* @__PURE__ */ React.createElement(RunningOrder, { state, store, reload }), /* @__PURE__ */ React.createElement(DeckPanel, { state, store, reload })), tab === "avoided" && /* @__PURE__ */ React.createElement("div", null, avoided.length === 0 && /* @__PURE__ */ React.createElement(Card, { style: { padding: `${S.x600 || 64}px ${S.x300}px`, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { fontSize: 16, color: C.body }) }, "Nothing set aside")), avoided.map((t) => /* @__PURE__ */ React.createElement(QuestionRow, { key: t.id, t, anchors: state.anchors, thread: /* @__PURE__ */ React.createElement(FacultyThread, { t, state }) }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(Pill, { bg: C.neutralBg, fg: C.ink, onClick: async () => {
       await store.status(t.id, "ready");
       reload();
     } }, "Unavoid"))))), /* @__PURE__ */ React.createElement(Toast, { message: toast }));

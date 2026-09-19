@@ -28,7 +28,21 @@
   .fl-scroll::-webkit-scrollbar-track { background: transparent; }
   .fl-q .fl-tools { opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
   .fl-q:hover .fl-tools, .fl-q:focus-within .fl-tools { opacity: 1; pointer-events: auto; }
-  @media (hover: none) { .fl-q .fl-tools { opacity: 1; pointer-events: auto; } }
+  @media (hover: none), (pointer: coarse) { .fl-q .fl-tools { opacity: 1; pointer-events: auto; } }
+  /* Hover, pointer devices only (touch never depends on it): a light tint laid
+     over whatever the control's own background is, so filled and transparent
+     controls respond alike; underline tabs darken their label instead. */
+  @media (hover: hover) and (pointer: fine) {
+    button:not(:disabled), select:not(:disabled), a[href] { cursor: pointer; }
+    button:disabled { cursor: default; }
+    button, a[href] { transition: box-shadow 120ms ease, border-color 120ms ease, color 120ms ease; }
+    button:not(:disabled):hover, a[href]:hover { box-shadow: inset 0 0 0 999px var(--fl-hover, rgba(0,0,0,.05)); }
+    [role="tab"]:not(:disabled):hover { box-shadow: none; }
+    [role="tab"][aria-selected="false"]:hover { color: var(--fl-ink, #000) !important; border-bottom-color: var(--fl-hover-line, #ACACAC) !important; }
+    .fl-cardbtn:not(:disabled):hover { border-color: var(--fl-hover-line, #ACACAC) !important; }
+    .fl-cardbtn.fl-on:hover { border-color: var(--fl-ink, #000) !important; }
+    .fl-q:hover .fl-own { border-color: var(--fl-hover-line, #ACACAC) !important; }
+  }
   #boot { max-width: 520px; margin: 60px auto; padding: 24px; background: #fff;
     border: 1px solid #DDDEE1; border-radius: 12px; line-height: 1.6; color: #505258; font-size: 14px; }
 </style>
@@ -561,6 +575,9 @@ try {
     Object.assign(C, mode === "dark" ? DARK : LIGHT);
     document.body.style.background = C.paper;
     document.documentElement.style.setProperty("--fl-scroll", C.flScroll);
+    document.documentElement.style.setProperty("--fl-hover", mode === "dark" ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.05)");
+    document.documentElement.style.setProperty("--fl-hover-line", C.flScroll);
+    document.documentElement.style.setProperty("--fl-ink", C.ink);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", C.paper);
   }
@@ -1505,7 +1522,7 @@ try {
       confirm2 && h("div", { style: { display: "flex", gap: 6, alignItems: "center", marginTop: S.x100 } }, h("span", { style: { fontSize: 12, color: C.body, marginRight: "auto" } }, "Delete this?"), h(Chip, { on: true, color: C.flTrash, onClick: () => onDelete(t) }, "delete"), h(Chip, { onClick: () => setConfirm(false) }, "cancel")));
     return h("div", { className: "fl-q", tabIndex: 0, style: { display: "flex", alignItems: "center", gap: S.x100, marginBottom: S.x150, outline: "none" } },
       circle,
-      h("div", { style: { flex: 1, minWidth: 0, display: "flex", border: `1px solid ${called ? C.aNow : C.flCard}`, borderRadius: 10, overflow: "hidden", background: C.surface } },
+      h("div", { className: mine ? "fl-own" : void 0, style: { flex: 1, minWidth: 0, display: "flex", border: `1px solid ${called ? C.aNow : C.flCard}`, borderRadius: 10, overflow: "hidden", background: C.surface } },
         h("div", { style: { width: 8, flexShrink: 0, background: stripe } }),
         body));
   }
@@ -1777,8 +1794,10 @@ try {
       const row = (state.pulses || []).find((p) => topicId && p.topic_id === topicId && p.subtopic_idx === idx && p.student_id === me.id);
       return row ? row.value : void 0;
     };
+    // Topic feedback is post-class only: nothing is written while the session
+    // is live (or not yet started), even if a stale control were tapped.
     async function setPulse(idx, v, topicId = current && current.id) {
-      if (!topicId) return;
+      if (!topicId || state.klass.status !== "ended") return;
       try {
         await store.setPulse(state.klass.id, topicId, idx, me.id, v);
         await refresh();
@@ -1788,8 +1807,7 @@ try {
       setTick((n) => n + 1);
     }
     const h = React.createElement;
-    // 👍 / 👎 pair: on the blue current-topic pill during class, and on plain
-    // rows in the post-class review ("light").
+    // 👍 / 👎 pair, used only by the post-class review rows.
     const thumbs = ({ idx, size, topicId, light }) => h("div", { style: { display: "flex", gap: 4, flexShrink: 0 } }, [[1, "Following this"], [-1, "Lost me"]].map(([v, label]) => {
       const tid = topicId || current && current.id;
       const on = myVote(idx, tid) === v;
@@ -1848,10 +1866,9 @@ try {
     ].concat(tp.subtopics.map((s, i) => rateRow({ tp, i, label: s }))) : [rateRow({ tp, i: -1, label: `Topic ${tp.ord} \xB7 ${tp.title}` })])) : null;
     // The current topic: the blue pill, with its subtopics and 👍/👎 inside.
     const curPill = current && h("div", { ref: curRef, style: pill("cur") },
-      h("div", { style: { display: "flex", alignItems: "center", gap: S.x100 } }, h("div", { style: { flex: 1, minWidth: 0, fontWeight: 600 } }, current.title), subs.length === 0 && thumbs({ idx: -1, size: 26 })),
+      h("div", { style: { display: "flex", alignItems: "center", gap: S.x100 } }, h("div", { style: { flex: 1, minWidth: 0, fontWeight: 600 } }, current.title), ),
       subs.length > 0 && h("div", { style: { display: "grid", gap: 6, marginTop: S.x100 } }, subs.map((st, i) => h("div", { key: st + ":" + i, style: { display: "flex", alignItems: "center", gap: S.x100 } },
-        h("span", { style: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: "18px", fontWeight: 400, color: C.tCurInk, background: "rgba(255,255,255,.35)", borderRadius: 6, padding: "3px 8px" } }, st),
-        thumbs({ idx: i, size: 24 })))));
+        h("span", { style: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: "18px", fontWeight: 400, color: C.tCurInk, background: "rgba(255,255,255,.35)", borderRadius: 6, padding: "3px 8px" } }, st)))));
     // Outline: sized to three topics by fitOutline, scrolls on its own. The
     // topic rows must be the scroll box's direct children for that to work.
     const outline = current && section(reviewing ? "rate what this class covered" : "class outline",
