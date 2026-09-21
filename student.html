@@ -27,6 +27,7 @@
   .fl-scroll::-webkit-scrollbar-thumb { background: var(--fl-scroll, #ACACAC); border-radius: 6px; }
   .fl-scroll::-webkit-scrollbar-track { background: transparent; }
   .fl-q .fl-tools { opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
+  .fl-q .fl-tools:focus-within, .fl-q .fl-confirming { opacity: 1; pointer-events: auto; }
   .fl-q:hover .fl-tools, .fl-q:focus-within .fl-tools { opacity: 1; pointer-events: auto; }
   @media (hover: none), (pointer: coarse) { .fl-q .fl-tools { opacity: 1; pointer-events: auto; } }
   /* Hover, pointer devices only (touch never depends on it): a light tint laid
@@ -729,14 +730,23 @@ try {
     };
     return { items, push, dismiss };
   }
-  const Notices = ({ items, onDismiss, place }) => items.length === 0 ? null : /* @__PURE__ */ React.createElement("div", { className: "fl-notices", role: "status", "aria-live": "polite", style: place }, items.map((n) => /* @__PURE__ */ React.createElement("div", { key: n.id, className: "fl-notice" + (n.leaving ? " fl-leaving" : ""), "data-notice": n.kind, style: { display: "flex", width: "100%", background: C.laterSoft, border: `1px solid ${C.tCur}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 6px 18px rgba(0,0,0,.18)" } },
-    /* @__PURE__ */ React.createElement("div", { style: { width: 8, flexShrink: 0, background: n.kind === "now" ? C.aNow : C.aTable } }),
-    /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, padding: "10px 12px" } },
+  const NOTICE_KIND = { now: ["say now", "aNow"], table: ["table", "aTable"], reply: ["follow-up", "aLater"] };
+  const Notices = ({ items, onDismiss, place }) => items.length === 0 ? null : /* @__PURE__ */ React.createElement("div", { className: "fl-notices", role: "status", "aria-live": "polite", style: place }, items.map((n) => {
+    const [label, tone] = NOTICE_KIND[n.kind] || NOTICE_KIND.table;
+    const body = /* @__PURE__ */ React.createElement(React.Fragment, null,
       /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
-        /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, lineHeight: "16px", fontWeight: 700, color: C.aInk, background: n.kind === "now" ? C.aNow : C.aTable, borderRadius: 999, padding: "1px 8px", flexShrink: 0 } }, n.kind === "now" ? "say now" : "table"),
-        /* @__PURE__ */ React.createElement("span", { style: { flex: 1, minWidth: 0, fontSize: 14, lineHeight: "20px", fontWeight: 600, color: C.ink } }, n.title),
-        /* @__PURE__ */ React.createElement("button", { className: "focusable", "aria-label": "Dismiss", title: "Dismiss", onClick: () => onDismiss(n.id), style: { border: "none", background: "transparent", color: C.body, width: 24, height: 24, borderRadius: 6, fontSize: 16, lineHeight: "20px", padding: 0, flexShrink: 0 } }, "\xD7")),
-      n.body && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 4, fontSize: 13, lineHeight: "18px", color: C.body, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } }, n.body)))));
+        /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, lineHeight: "16px", fontWeight: 700, color: C.aInk, background: C[tone], borderRadius: 999, padding: "1px 8px", flexShrink: 0 } }, label),
+        /* @__PURE__ */ React.createElement("span", { style: { flex: 1, minWidth: 0, fontSize: 14, lineHeight: "20px", fontWeight: 600, color: C.ink } }, n.title)),
+      n.body && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 4, fontSize: 13, lineHeight: "18px", color: C.body, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } }, n.body));
+    return /* @__PURE__ */ React.createElement("div", { key: n.id, className: "fl-notice" + (n.leaving ? " fl-leaving" : ""), "data-notice": n.kind, style: { display: "flex", width: "100%", background: C.laterSoft, border: `1px solid ${C.tCur}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 6px 18px rgba(0,0,0,.18)" } },
+      /* @__PURE__ */ React.createElement("div", { style: { width: 8, flexShrink: 0, background: C[tone] } }),
+      // tapping the card takes you to what it is about, when there is somewhere to go
+      n.onOpen ? /* @__PURE__ */ React.createElement("button", { className: "focusable", "data-notice-open": "1", onClick: () => {
+        n.onOpen();
+        onDismiss(n.id);
+      }, style: { flex: 1, minWidth: 0, padding: "10px 4px 10px 12px", background: "transparent", border: "none", font: "inherit", textAlign: "left", cursor: "pointer" } }, body) : /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, padding: "10px 4px 10px 12px" } }, body),
+      /* @__PURE__ */ React.createElement("button", { className: "focusable", "aria-label": "Dismiss", title: "Dismiss", onClick: () => onDismiss(n.id), style: { border: "none", background: "transparent", color: C.body, width: 24, height: 24, margin: "8px 8px 0 0", borderRadius: 6, fontSize: 16, lineHeight: "20px", padding: 0, flexShrink: 0, alignSelf: "flex-start" } }, "\xD7"));
+  }));
   const Banner = ({ tone, title, children }) => {
     const map = { bad: { bg: C.dangerSub, fg: C.danger, icon: "!" }, info: { bg: C.nowSub, fg: C.now, icon: "i" } };
     const t = map[tone === "bad" ? "bad" : "info"];
@@ -1432,8 +1442,8 @@ try {
             student_id: t.anonymous && t.student_id !== viewer ? null : t.student_id,
             student_name: t.anonymous ? "Anonymous" : (d.students.find((s) => s.id === t.student_id) || {}).name || "Someone",
             replies: t.replies || [],
-            reaction_count: (t.reactions || []).length,
-            reacted_by: t.reactions || []
+            reaction_count: t.student_id === viewer ? (t.reactions || []).length : null,
+            reacted_by_me: (t.reactions || []).includes(viewer)
           }));
         }
         const [f, r] = await Promise.all([sb.rpc("class_now_feed", { p_class_id: classId, p_viewer: viewer || null }), sb.rpc("class_now_replies", { p_class_id: classId, p_viewer: viewer || null })]);
@@ -1445,19 +1455,23 @@ try {
           (by[x.thought_id] = by[x.thought_id] || []).push(x);
         });
         const feed = f.data || [];
-        const reactors = {};
-        if (feed.length) {
+        // The feed carries reacted_by_me, and reaction_count only for the
+        // asker. Before that migration the columns are missing, so fall back
+        // to counting the rows here as it used to.
+        if (feed.length && feed[0].reacted_by_me === void 0) {
+          const reactors = {};
           const { data: rx, error: rxError } = await sb.from("reactions").select("thought_id,student_id").in("thought_id", feed.map((t) => t.id));
           if (rxError) throw rxError;
           (rx || []).forEach((x) => {
             (reactors[x.thought_id] = reactors[x.thought_id] || []).push(x.student_id);
           });
+          return feed.map((t) => __spreadProps(__spreadValues({}, t), {
+            replies: by[t.id] || [],
+            reacted_by_me: (reactors[t.id] || []).includes(viewer),
+            reaction_count: t.student_id === viewer ? (reactors[t.id] || []).length : null
+          }));
         }
-        return feed.map((t) => __spreadProps(__spreadValues({}, t), {
-          replies: by[t.id] || [],
-          reacted_by: reactors[t.id] || [],
-          reaction_count: (reactors[t.id] || []).length
-        }));
+        return feed.map((t) => __spreadProps(__spreadValues({}, t), { replies: by[t.id] || [] }));
       },
       // viewer: the student asking. The RPCs name the asker of an anonymous
       // question (and their own follow-ups on it) only to that asker.
@@ -1468,8 +1482,8 @@ try {
             student_id: t.anonymous && t.student_id !== viewer ? null : t.student_id,
             student_name: t.anonymous ? "Anonymous" : (d.students.find((s) => s.id === t.student_id) || {}).name || "Someone",
             replies: t.replies || [],
-            reaction_count: (t.reactions || []).length,
-            reacted_by: t.reactions || []
+            reaction_count: t.student_id === viewer ? (t.reactions || []).length : null,
+            reacted_by_me: (t.reactions || []).includes(viewer)
           }));
         }
         let [f, r] = await Promise.all([sb.rpc("table_feed", { p_table_id: tableId, p_viewer: viewer || null }), sb.rpc("table_replies", { p_table_id: tableId, p_viewer: viewer || null })]);
@@ -1483,19 +1497,23 @@ try {
           (by[x.thought_id] = by[x.thought_id] || []).push(x);
         });
         const feed = f.data || [];
-        const reactors = {};
-        if (feed.length) {
+        // The feed carries reacted_by_me, and reaction_count only for the
+        // asker. Before that migration the columns are missing, so fall back
+        // to counting the rows here as it used to.
+        if (feed.length && feed[0].reacted_by_me === void 0) {
+          const reactors = {};
           const { data: rx, error: rxError } = await sb.from("reactions").select("thought_id,student_id").in("thought_id", feed.map((t) => t.id));
           if (rxError) throw rxError;
           (rx || []).forEach((x) => {
             (reactors[x.thought_id] = reactors[x.thought_id] || []).push(x.student_id);
           });
+          return feed.map((t) => __spreadProps(__spreadValues({}, t), {
+            replies: by[t.id] || [],
+            reacted_by_me: (reactors[t.id] || []).includes(viewer),
+            reaction_count: t.student_id === viewer ? (reactors[t.id] || []).length : null
+          }));
         }
-        return feed.map((t) => __spreadProps(__spreadValues({}, t), {
-          replies: by[t.id] || [],
-          reacted_by: reactors[t.id] || [],
-          reaction_count: (reactors[t.id] || []).length
-        }));
+        return feed.map((t) => __spreadProps(__spreadValues({}, t), { replies: by[t.id] || [] }));
       },
       async repliesFor(thoughtIds) {
         if (!thoughtIds.length) return [];
@@ -1583,7 +1601,7 @@ try {
   } }, children);
   // social: the question is open to the class (the say-now feed), so it
   // takes +1s and follow-ups the way a table question does.
-  function QuestionCard({ t, anchors, topics, mine, me, busy, onMove, onRecall, onDelete, onReply, onReact, onResolve, onEdit, showCircle, social }) {
+  function QuestionCard({ t, anchors, topics, mine, me, busy, onMove, onRecall, onDelete, onReply, onReact, onResolve, onEdit, showCircle, social, openId }) {
     const h = React.createElement;
     const [open, setOpen] = useState(false);
     const [reply, setReply] = useState("");
@@ -1591,6 +1609,10 @@ try {
     const [confirm2, setConfirm] = useState(false);
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(t.text);
+    // Opening a follow-up notification opens that question's thread.
+    useEffect(() => {
+      if (openId && openId === t.id) setOpen(true);
+    }, [openId]);
     const anchor = anchors.find((a) => a.id === t.anchor_id);
     // Where in the lecture outline this question sits, from the existing
     // topics / anchors data.
@@ -1604,7 +1626,7 @@ try {
     const called = t.status === "taking";
     const setAside = t.status === "avoided";
     const replies = t.replies || [];
-    const reacted = (t.reacted_by || []).includes(me && me.id);
+    const reacted = t.reacted_by_me !== void 0 ? !!t.reacted_by_me : (t.reacted_by || []).includes(me && me.id);
     const isTable = t.visibility === "table";
     const shared = isTable || !!social;
     const accent = isTable ? C.aTable : C.aNow;
@@ -1612,7 +1634,8 @@ try {
     // since moved off the table; new follow-ups are only for table questions.
     const threaded = shared || replies.length > 0;
     const stripe = stripeOf(t.visibility);
-    const recallable = mine && withinRecall(t);
+    // Answered questions stay put: no take back, no delete.
+    const recallable = mine && !done && withinRecall(t);
     const canEdit = mine && !done && !called;
     // The circle: only on this student's own questions. It marks the question
     // as no longer needed (status "resolved"), and clears that again.
@@ -1625,11 +1648,15 @@ try {
       title: resolvedByMe ? "Mark as still needed" : done ? "Done" : "No longer needed",
       style: { width: 20, height: 20, borderRadius: "50%", flexShrink: 0, padding: 0, border: `1.5px solid ${done ? C.aNow : C.flRing}`, background: done ? C.aNow : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: busy || called || done && !resolvedByMe ? "default" : "pointer" }
     }, done && h("span", { style: { color: "#FFFFFF", fontSize: 11, lineHeight: 1 } }, "✓"));
-    const tools = mine && !editing && !confirm2 && (canEdit || recallable) && h("div", { className: "fl-tools", style: { position: "absolute", top: 8, right: 8, display: "flex", gap: 2, background: C.surface, borderRadius: R.md } },
+    const tools = mine && !editing && (confirm2 || canEdit || recallable) && h("div", { className: confirm2 ? "fl-tools fl-confirming" : "fl-tools", style: { position: "absolute", top: 8, right: 8, display: "flex", alignItems: "center", gap: confirm2 ? 6 : 2, background: C.surface, borderRadius: R.md, padding: confirm2 ? "2px 4px" : 0, border: confirm2 ? `1px solid ${C.flCard}` : "none" } },
+      confirm2 && h("span", { style: { fontSize: 12, lineHeight: "16px", color: C.body } }, "Delete?"),
+      confirm2 && h(Chip, { on: true, color: C.flTrash, onClick: () => onDelete(t) }, "delete"),
+      confirm2 && h(Chip, { onClick: () => setConfirm(false) }, "cancel"),
+      !confirm2 &&
       canEdit && h("button", { className: "focusable", title: "Edit", "aria-label": "Edit", onClick: () => { setDraft(t.text); setEditing(true); }, style: { border: "none", background: "transparent", padding: 5, borderRadius: R.md, display: "flex", cursor: "pointer" } }, h(PencilIcon, { color: C.flPencil })),
-      recallable && h("button", { className: "focusable", title: "Delete", "aria-label": "Delete", onClick: () => setConfirm(true), style: { border: "none", background: "transparent", padding: 5, borderRadius: R.md, display: "flex", cursor: "pointer" } }, h(TrashIcon, { color: C.flTrash })));
+      !confirm2 && recallable && h("button", { className: "focusable", title: "Delete", "aria-label": "Delete", onClick: () => setConfirm(true), style: { border: "none", background: "transparent", padding: 5, borderRadius: R.md, display: "flex", cursor: "pointer" } }, h(TrashIcon, { color: C.flTrash })));
     const chips = (threaded || mine && !done && !called && !editing) && h("div", { style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: S.x100 } },
-      shared && !mine && h(Chip, { onClick: () => onReact(t, reacted), on: reacted, color: accent, title: "Same question" }, "+1", t.reaction_count > 0 ? " \xB7 " + t.reaction_count : ""),
+      shared && !mine && h(Chip, { onClick: () => onReact(t, reacted), on: reacted, color: accent, title: reacted ? "You said you have the same question" : "Same question" }, "+1"),
       shared && mine && t.reaction_count > 0 && h("span", { style: { fontSize: 11, lineHeight: "16px", fontWeight: 500, color: C.chipInk, background: C.chip, borderRadius: R.full, padding: "2px 9px" } }, "+", t.reaction_count),
       threaded && h(Chip, { onClick: () => setOpen(!open), on: open, color: C.flGrey }, replies.length ? `${replies.length} follow up${replies.length > 1 ? "s" : ""}` : "Add a follow up"),
       mine && !done && !called && !editing && h("div", { className: "fl-tools", style: { display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" } },
@@ -1657,7 +1684,7 @@ try {
         setAside && h("span", null, "\xB7 set aside for now"), resolvedByMe && h("span", null, "\xB7 no longer needed")),
       tools, chips, thread,
       called && h("div", { style: { marginTop: S.x150, background: C.aNow, borderRadius: R.lg, padding: S.x150 } }, h("div", { style: { fontSize: 14, fontWeight: 700, color: C.aInk, marginBottom: S.x100 } }, "The floor is yours"), h(Chip, { on: true, color: "#FFFFFF", onClick: () => onMove(t, "__spoken") }, "I said it")),
-      confirm2 && h("div", { style: { display: "flex", gap: 6, alignItems: "center", marginTop: S.x100 } }, h("span", { style: { fontSize: 12, color: C.body, marginRight: "auto" } }, "Delete this?"), h(Chip, { on: true, color: C.flTrash, onClick: () => onDelete(t) }, "delete"), h(Chip, { onClick: () => setConfirm(false) }, "cancel")));
+      null);
     return h("div", { className: "fl-q", tabIndex: 0, style: { display: "flex", alignItems: "center", gap: S.x100, marginBottom: S.x150, outline: "none" } },
       circle,
       h("div", { className: mine ? "fl-own" : void 0, style: { flex: 1, minWidth: 0, display: "flex", border: `1px solid ${called ? C.aNow : C.flCard}`, borderRadius: 10, overflow: "hidden", background: C.surface } },
@@ -1704,11 +1731,32 @@ try {
     const [topicCheck, setTopicCheck] = useState(null);
     const lastTopic = useRef(void 0);
     const askedFor = useRef(/* @__PURE__ */ new Set());
+    // Follow-ups on questions I asked (state.replies covers exactly those).
+    const repliesSeen = useRef(null);
+    const [openThread, setOpenThread] = useState(null);
     // "A question was shared with your table": slides in for tablemates when
     // a question they haven't seen appears in the table feed (not their own).
     // No name is shown. The first load only records what is already there.
     const notices = useNotices();
     const feedSeen = useRef(null);
+    useEffect(() => {
+      const rs = state && state.replies;
+      if (!rs) return;
+      if (!repliesSeen.current) {
+        repliesSeen.current = new Set(rs.map((r) => r.id));
+        return;
+      }
+      rs.forEach((r) => {
+        if (repliesSeen.current.has(r.id)) return;
+        repliesSeen.current.add(r.id);
+        // never for my own follow-up, and never naming anyone
+        if (r.student_id === me.id) return;
+        notices.push({ id: "reply:" + r.id, kind: "reply", title: "Someone followed up on your question", body: r.text, onOpen: () => {
+          setPane("mine");
+          setOpenThread(r.thought_id);
+        } });
+      });
+    }, [state && state.replies]);
     useEffect(() => {
       if (!feedSeen.current) return;
       feed.forEach((t) => {
@@ -2059,7 +2107,8 @@ try {
     // A plain function, not a component: a component defined in here would be a
     // new type on every render, so React would rebuild the box (and lose the
     // outline's scroll position) each time.
-    const section = (title, ...children) => h("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: `${S.x100}px ${S.x150}px ${S.x150}px`, background: C.surface, flexShrink: 0 } }, title && h("div", { style: { fontSize: 15, lineHeight: "22px", color: C.ink, marginBottom: S.x100 } }, title), ...children);
+    const sectionOn = (bg, title, ...children) => h("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: `${S.x100}px ${S.x150}px ${S.x150}px`, background: bg, flexShrink: 0 } }, title && h("div", { style: { fontSize: 15, lineHeight: "22px", color: C.ink, marginBottom: S.x100 } }, title), ...children);
+    const section = (title, ...children) => sectionOn(C.surface, title, ...children);
     const pill = (tone) => ({
       borderRadius: 10,
       padding: "10px 16px",
@@ -2121,7 +2170,8 @@ try {
       onLeaveClass && h("div", { style: { marginTop: S.x250, paddingTop: S.x150, borderTop: `1px solid ${C.flBox}`, display: "flex", justifyContent: "flex-end" } },
         h("button", { className: "focusable fl-link", "data-leave-class": "1", onClick: onLeaveClass, style: { border: "none", background: "transparent", padding: "6px 2px", fontSize: 13, lineHeight: "18px", color: C.muted, textDecoration: "underline", textDecorationColor: C.flField, cursor: "pointer" } }, "Leave class")));
     const box = (extra) => __spreadValues({ border: `1px solid ${C.flField}`, borderRadius: 12, padding: "8px 12px", fontSize: 13, lineHeight: "18px", textAlign: "left", background: C.surface, color: C.ink }, extra);
-    const ask = section("ask",
+    // A shade off the other two sections, so the composer reads as its own thing.
+    const ask = sectionOn(C.tNext, "ask",
       h("textarea", { ref: boxRef, className: "focusable fl-scroll", value: text, onChange: (e) => {
         setText(e.target.value);
         setDismissed(false);
@@ -2143,10 +2193,8 @@ try {
       ready && suggestions.length > 1 && !dismissed && h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 } }, suggestions.slice(1).map((a) => h(Chip, { key: a.id, onClick: () => setAnchorId(a.id) }, a.label))),
       h("div", { style: { display: "flex", gap: 10, marginTop: S.x150, alignItems: "flex-start" } },
         h("button", { className: "focusable", onClick: doWording, disabled: !ready || wording, style: { border: "none", borderRadius: 10, background: C.flGrey, color: C.flGreyInk, padding: "10px 14px", fontSize: 13, fontWeight: 500, flexShrink: 0, cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.6 } }, wording ? "rephrasing…" : "rephrase it"),
-        h("div", { style: { flex: 1, minWidth: 0, display: "grid", gap: S.x100 } },
-          [0, 1].map((i) => {
-            const o = shown[i];
-            if (!o) return h("div", { key: i, style: box({ color: C.tNextInk }) }, `suggestion ${i + 1}`);
+        (shown.length > 0 || wordErr || original) && h("div", { style: { flex: 1, minWidth: 0, display: "grid", gap: S.x100 } },
+          shown.map((o, i) => {
             const picked = o === text;
             return h("button", { key: i, className: "focusable", onClick: () => {
               if (!picked) {
@@ -2168,7 +2216,7 @@ try {
         h("span", { style: { color: showName ? C.muted : C.ink, fontWeight: showName ? 400 : 600 } }, showName ? "on" : "off \xB7 sent as Anonymous")),
       h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: S.x150 } }, [["table", "share with table", C.aTable], ["now", "send now", C.aNow], ["later", "ask later", C.aLater]].map(([k, lab, bg]) => h("button", { key: k, className: "focusable", disabled: !ready || sending, onClick: () => send(k), style: { border: "none", borderRadius: 10, background: bg, color: C.aInk, padding: "11px 4px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", cursor: ready && !sending ? "pointer" : "default", opacity: ready ? 1 : 0.55 } }, lab))))));
     const empty = (title, body) => h("div", { style: { padding: `${S.x400 || 32}px ${S.x200}px`, textAlign: "center" } }, h("div", { style: { fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 4 } }, title), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.muted } }, body));
-    const card = (t, extra) => h(QuestionCard, __spreadValues({ key: t.id, t, anchors: state.anchors, topics: state.topics, me, busy: sending, mine: t.student_id === me.id, onMove: move, onRecall: recall, onDelete: del, onReply: addReply, onReact: async (th, on) => {
+    const card = (t, extra) => h(QuestionCard, __spreadValues({ key: t.id, t, anchors: state.anchors, topics: state.topics, me, busy: sending, openId: openThread, mine: t.student_id === me.id, onMove: move, onRecall: recall, onDelete: del, onReply: addReply, onReact: async (th, on) => {
       await store.react(th.id, me.id, on);
       if (th.visibility === "table") setFeed(await store.tableFeed(me.table_id, me.id));
       else pullClass.current();

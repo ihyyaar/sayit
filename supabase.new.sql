@@ -251,7 +251,8 @@ create or replace function public.table_feed(p_table_id uuid, p_viewer uuid defa
 returns table (
   id uuid, class_id uuid, student_id uuid, table_id uuid, topic_id uuid,
   anchor_id uuid, text text, visibility text, status text,
-  created_at timestamptz, student_name text, anonymous boolean
+  created_at timestamptz, student_name text, anonymous boolean,
+  reaction_count integer, reacted_by_me boolean
 )
 language sql
 stable
@@ -264,7 +265,12 @@ as $$
          t.table_id, t.topic_id, t.anchor_id, t.text, t.visibility, t.status,
          t.created_at,
          case when t.anonymous then 'Anonymous' else coalesce(s.name, 'Someone') end,
-         t.anonymous
+         t.anonymous,
+         case when t.student_id is not distinct from p_viewer
+              then (select count(*) from public.reactions x where x.thought_id = t.id)::int
+              else null end,
+         exists (select 1 from public.reactions x
+                 where x.thought_id = t.id and x.student_id = p_viewer)
   from public.thoughts t
   left join public.students s on s.id = t.student_id
   where t.table_id = p_table_id
@@ -302,11 +308,13 @@ grant execute on function public.table_replies(uuid, uuid) to anon, authenticate
 
 -- Say-now questions for the whole class, masked the same way (see
 -- supabase.migration-class-say-now.sql). Avoided questions are not shown.
+-- reaction_count goes only to the asker (supabase.migration-plus-one-privacy.sql).
 create or replace function public.class_now_feed(p_class_id uuid, p_viewer uuid default null)
 returns table (
   id uuid, class_id uuid, student_id uuid, table_id uuid, topic_id uuid,
   anchor_id uuid, text text, visibility text, status text,
-  created_at timestamptz, student_name text, anonymous boolean
+  created_at timestamptz, student_name text, anonymous boolean,
+  reaction_count integer, reacted_by_me boolean
 )
 language sql
 stable
@@ -319,7 +327,12 @@ as $$
          t.table_id, t.topic_id, t.anchor_id, t.text, t.visibility, t.status,
          t.created_at,
          case when t.anonymous then 'Anonymous' else coalesce(s.name, 'Someone') end,
-         t.anonymous
+         t.anonymous,
+         case when t.student_id is not distinct from p_viewer
+              then (select count(*) from public.reactions x where x.thought_id = t.id)::int
+              else null end,
+         exists (select 1 from public.reactions x
+                 where x.thought_id = t.id and x.student_id = p_viewer)
   from public.thoughts t
   left join public.students s on s.id = t.student_id
   where t.class_id = p_class_id
