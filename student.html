@@ -730,7 +730,7 @@ try {
     };
     return { items, push, dismiss };
   }
-  const NOTICE_KIND = { now: ["say now", "aNow"], table: ["table", "aTable"], reply: ["follow-up", "aLater"] };
+  const NOTICE_KIND = { now: ["Say now", "aNow"], table: ["Table", "aTable"], reply: ["Follow-up", "aLater"] };
   const Notices = ({ items, onDismiss, place }) => items.length === 0 ? null : /* @__PURE__ */ React.createElement("div", { className: "fl-notices", role: "status", "aria-live": "polite", style: place }, items.map((n) => {
     const [label, tone] = NOTICE_KIND[n.kind] || NOTICE_KIND.table;
     const body = /* @__PURE__ */ React.createElement(React.Fragment, null,
@@ -1650,8 +1650,8 @@ try {
     }, done && h("span", { style: { color: "#FFFFFF", fontSize: 11, lineHeight: 1 } }, "✓"));
     const tools = mine && !editing && (confirm2 || canEdit || recallable) && h("div", { className: confirm2 ? "fl-tools fl-confirming" : "fl-tools", style: { position: "absolute", top: 8, right: 8, display: "flex", alignItems: "center", gap: confirm2 ? 6 : 2, background: C.surface, borderRadius: R.md, padding: confirm2 ? "2px 4px" : 0, border: confirm2 ? `1px solid ${C.flCard}` : "none" } },
       confirm2 && h("span", { style: { fontSize: 12, lineHeight: "16px", color: C.body } }, "Delete?"),
-      confirm2 && h(Chip, { on: true, color: C.flTrash, onClick: () => onDelete(t) }, "delete"),
-      confirm2 && h(Chip, { onClick: () => setConfirm(false) }, "cancel"),
+      confirm2 && h(Chip, { on: true, color: C.flTrash, onClick: () => onDelete(t) }, "Delete"),
+      confirm2 && h(Chip, { onClick: () => setConfirm(false) }, "Cancel"),
       !confirm2 &&
       canEdit && h("button", { className: "focusable", title: "Edit", "aria-label": "Edit", onClick: () => { setDraft(t.text); setEditing(true); }, style: { border: "none", background: "transparent", padding: 5, borderRadius: R.md, display: "flex", cursor: "pointer" } }, h(PencilIcon, { color: C.flPencil })),
       !confirm2 && recallable && h("button", { className: "focusable", title: "Delete", "aria-label": "Delete", onClick: () => setConfirm(true), style: { border: "none", background: "transparent", padding: 5, borderRadius: R.md, display: "flex", cursor: "pointer" } }, h(TrashIcon, { color: C.flTrash })));
@@ -1660,12 +1660,12 @@ try {
       shared && mine && t.reaction_count > 0 && h("span", { style: { fontSize: 11, lineHeight: "16px", fontWeight: 500, color: C.chipInk, background: C.chip, borderRadius: R.full, padding: "2px 9px" } }, "+", t.reaction_count),
       threaded && h(Chip, { onClick: () => setOpen(!open), on: open, color: C.flGrey }, replies.length ? `${replies.length} follow up${replies.length > 1 ? "s" : ""}` : "Add a follow up"),
       mine && !done && !called && !editing && h("div", { className: "fl-tools", style: { display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" } },
-        h("span", { style: { fontSize: 11, color: C.muted } }, "send to"),
-        Object.values(ACTIONS).map((a) => h(Chip, { key: a.key, on: t.visibility === a.key, color: stripeOf(a.key), disabled: busy || t.visibility === a.key, onClick: () => onMove(t, a.key) }, a.key === "table" ? "table" : a.key)),
-        recallable && h(Chip, { disabled: busy, onClick: () => onRecall(t), title: "Take it back into your box" }, "take back")));
+        h("span", { style: { fontSize: 11, color: C.muted } }, "Send to"),
+        Object.values(ACTIONS).map((a) => h(Chip, { key: a.key, on: t.visibility === a.key, color: stripeOf(a.key), disabled: busy || t.visibility === a.key, onClick: () => onMove(t, a.key) }, a.key === "table" ? "Table" : a.key === "now" ? "Now" : "Later")),
+        recallable && h(Chip, { disabled: busy, onClick: () => onRecall(t), title: "Take it back into your box" }, "Take back")));
     const thread = threaded && open && h("div", { "data-thread": t.id, style: { marginTop: S.x100, marginLeft: 2, paddingLeft: S.x150, borderLeft: `2px solid ${stripe}`, display: "grid", gap: S.x100 } },
       replies.map((r) => h("div", { key: r.id }, h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted } }, r.student_name, " \xB7 ", relTime(r.created_at)), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.ink } }, r.text))),
-      shared && h("textarea", { className: "focusable", value: reply, onChange: (e) => setReply(e.target.value), placeholder: "add a follow up", style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 44, resize: "none", fontSize: 13, borderColor: C.flField, borderRadius: R.lg }) }),
+      shared && h("textarea", { className: "focusable", value: reply, onChange: (e) => setReply(e.target.value), placeholder: "Add a follow up", style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 44, resize: "none", fontSize: 13, borderColor: C.flField, borderRadius: R.lg }) }),
       shared && reply.trim() && h("div", null, h(Chip, { on: true, color: accent, disabled: posting, onClick: async () => {
         setPosting(true);
         const ok = await onReply(t, reply.trim());
@@ -1677,10 +1677,10 @@ try {
       editing ? h("div", null,
         h("textarea", { className: "focusable", value: draft, onChange: (e) => setDraft(e.target.value), autoFocus: true, style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 56, resize: "none", fontSize: 14, borderColor: C.flField, borderRadius: R.lg }) }),
         h("div", { style: { display: "flex", gap: 6, marginTop: 6 } },
-          h(Chip, { on: true, color: C.aNow, disabled: busy || !draft.trim() || draft.trim() === t.text, onClick: async () => { if (await onEdit(t, draft.trim()) !== false) setEditing(false); } }, "save"),
-          h(Chip, { onClick: () => { setDraft(t.text); setEditing(false); } }, "cancel"))) : h("div", { style: { fontSize: 14, lineHeight: "20px", color: done ? C.muted : C.ink, textDecoration: done ? "line-through" : "none", paddingRight: mine ? 52 : 0 } }, t.text),
+          h(Chip, { on: true, color: C.aNow, disabled: busy || !draft.trim() || draft.trim() === t.text, onClick: async () => { if (await onEdit(t, draft.trim()) !== false) setEditing(false); } }, "Save"),
+          h(Chip, { onClick: () => { setDraft(t.text); setEditing(false); } }, "Cancel"))) : h("div", { style: { fontSize: 14, lineHeight: "20px", color: done ? C.muted : C.ink, textDecoration: done ? "line-through" : "none", paddingRight: mine ? 52 : 0 } }, t.text),
       h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted, marginTop: 4, display: "flex", gap: 4, flexWrap: "wrap" } },
-        h("span", null, mine ? "You" : t.student_name || "Someone"), mine && t.anonymous && h("span", { "data-anon": "1", style: { fontWeight: 600, color: C.chipInk, background: C.chip, borderRadius: 999, padding: "0 6px" } }, "anonymous"), h("span", null, "\xB7"), h("span", null, relTime(t.created_at)),
+        h("span", null, mine ? "You" : t.student_name || "Someone"), mine && t.anonymous && h("span", { "data-anon": "1", style: { fontWeight: 600, color: C.chipInk, background: C.chip, borderRadius: 999, padding: "0 6px" } }, "Anonymous"), h("span", null, "\xB7"), h("span", null, relTime(t.created_at)),
         setAside && h("span", null, "\xB7 set aside for now"), resolvedByMe && h("span", null, "\xB7 no longer needed")),
       tools, chips, thread,
       called && h("div", { style: { marginTop: S.x150, background: C.aNow, borderRadius: R.lg, padding: S.x150 } }, h("div", { style: { fontSize: 14, fontWeight: 700, color: C.aInk, marginBottom: S.x100 } }, "The floor is yours"), h(Chip, { on: true, color: "#FFFFFF", onClick: () => onMove(t, "__spoken") }, "I said it")),
@@ -1910,8 +1910,8 @@ try {
       closeAsk();
       if (myVote(-1, a.topic.id) !== v) await setPulse(-1, v, a.topic.id, true);
     }
-    if (!state && loadErr) return React.createElement("div", { style: { padding: "14vh 16px 32px", background: C.surface, minHeight: "100%" } }, React.createElement(Logo, { height: 24 }), React.createElement("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: 16, marginTop: 28 } }, React.createElement("div", { style: { fontSize: 18, lineHeight: "24px", fontWeight: 800, letterSpacing: -0.4, color: C.flInk, marginBottom: 6 } }, "can't open this class"), React.createElement("div", { style: { fontSize: 14, lineHeight: "20px", color: C.body, marginBottom: 16 } }, loadErr), React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } }, [["try again", () => refresh()], ["profile", onProfile], ["reset this device", resetDevice]].map(([l, fn]) => React.createElement("button", { key: l, className: "focusable", onClick: fn, style: { border: "none", borderRadius: 9, background: C.flGrey, color: C.flGreyInk, padding: "9px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" } }, l)))));
-    if (!state) return /* @__PURE__ */ React.createElement("div", { style: { padding: "20vh 16px", textAlign: "center", color: C.muted, fontSize: 14, background: C.surface, minHeight: "100%" } }, /* @__PURE__ */ React.createElement(Spin, null), " loading");
+    if (!state && loadErr) return React.createElement("div", { style: { padding: "14vh 16px 32px", background: C.surface, minHeight: "100%" } }, React.createElement(Logo, { height: 24 }), React.createElement("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: 16, marginTop: 28 } }, React.createElement("div", { style: { fontSize: 18, lineHeight: "24px", fontWeight: 800, letterSpacing: -0.4, color: C.flInk, marginBottom: 6 } }, "Can't open this class"), React.createElement("div", { style: { fontSize: 14, lineHeight: "20px", color: C.body, marginBottom: 16 } }, loadErr), React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } }, [["Try again", () => refresh()], ["Profile", onProfile], ["Reset this device", resetDevice]].map(([l, fn]) => React.createElement("button", { key: l, className: "focusable", onClick: fn, style: { border: "none", borderRadius: 9, background: C.flGrey, color: C.flGreyInk, padding: "9px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" } }, l)))));
+    if (!state) return /* @__PURE__ */ React.createElement("div", { style: { padding: "20vh 16px", textAlign: "center", color: C.muted, fontSize: 14, background: C.surface, minHeight: "100%" } }, /* @__PURE__ */ React.createElement(Spin, null), " Loading");
     const topics = state.topics;
     const idx = topics.findIndex((t) => t.id === state.klass.current_topic_id);
     const current = idx >= 0 ? topics[idx] : null;
@@ -2143,7 +2143,7 @@ try {
     ].concat(covered.flatMap((tp) => (tp.subtopics || []).length ? [
       // The topic as a whole (what the in-class topic check asks) sits on its
       // heading; optional, so it doesn't count towards "still to rate".
-      h("div", { key: tp.id + ":h", style: { display: "flex", alignItems: "center", gap: S.x150, padding: "8px 12px 0 2px" } }, h("div", { style: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: "21px", fontWeight: 600, color: C.ink } }, `Topic ${tp.ord} \xB7 ${tp.title}`, h("div", { style: { fontSize: 12, lineHeight: "16px", fontWeight: 400, color: C.muted } }, "overall, then each part")), thumbs({ idx: -1, topicId: tp.id, size: 34, light: true }))
+      h("div", { key: tp.id + ":h", style: { display: "flex", alignItems: "center", gap: S.x150, padding: "8px 12px 0 2px" } }, h("div", { style: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: "21px", fontWeight: 600, color: C.ink } }, `Topic ${tp.ord} \xB7 ${tp.title}`, h("div", { style: { fontSize: 12, lineHeight: "16px", fontWeight: 400, color: C.muted } }, "Overall, then each part")), thumbs({ idx: -1, topicId: tp.id, size: 34, light: true }))
     ].concat(tp.subtopics.map((s, i) => rateRow({ tp, i, label: s }))) : [rateRow({ tp, i: -1, label: `Topic ${tp.ord} \xB7 ${tp.title}` })])) : null;
     // The current topic: the blue pill, with its subtopics and 👍/👎 inside.
     const curPill = current && h("div", { ref: curRef, style: pill("cur") },
@@ -2152,7 +2152,7 @@ try {
         h("span", { style: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: "18px", fontWeight: 400, color: C.tCurInk, background: "rgba(255,255,255,.35)", borderRadius: 6, padding: "3px 8px" } }, st)))));
     // Outline: sized to three topics by fitOutline, scrolls on its own. The
     // topic rows must be the scroll box's direct children for that to work.
-    const outline = current && section(reviewing ? "How well did you understand this topic?" : "class outline",
+    const outline = current && section(reviewing ? "How well did you understand this topic?" : "Class outline",
       h("div", { className: "fl-scroll", "data-outline": "1", style: { display: "grid", gap: S.x100, alignContent: "start", gridAutoRows: "max-content", height: !reviewing && outlineH ? outlineH : void 0, maxHeight: "50vh", overflowY: "auto", overscrollBehavior: "contain", paddingRight: 4 } },
         reviewing ? reviewList : earlier.map((t) => topicPill(t, "prev")),
         !reviewing && curPill,
@@ -2160,7 +2160,7 @@ try {
     // After the session ends the board is just this: the ask box and the
     // question tabs step aside so the review is the one thing to do.
     const reviewBlock = reviewing && h("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: `${S.x250}px ${S.x200}px`, background: C.surface } },
-      h("div", { style: { fontSize: 28, lineHeight: "34px", fontWeight: 800, letterSpacing: -0.9, color: C.flInk } }, "class is over"),
+      h("div", { style: { fontSize: 28, lineHeight: "34px", fontWeight: 800, letterSpacing: -0.9, color: C.flInk } }, "Class is over"),
       h("div", { style: { fontSize: 17, lineHeight: "24px", color: C.ink, marginTop: S.x050 } }, "How well did you understand this topic?"),
       h("div", { style: { fontSize: 13, lineHeight: "19px", color: C.muted, marginTop: 2, marginBottom: S.x200 } }, "Rate each part: it shows you what to go back over. Tap your answer again to clear it."),
       h("div", { "data-legend": "1", style: { display: "flex", gap: S.x200, flexWrap: "wrap", fontSize: 12, lineHeight: "16px", color: C.body, marginBottom: S.x150 } }, PULSE.map(([v, label]) => h("span", { key: v, style: { display: "inline-flex", alignItems: "center", gap: 4 } }, h(PulseIcon, { v, color: C.body }), label))),
@@ -2171,28 +2171,28 @@ try {
         h("button", { className: "focusable fl-link", "data-leave-class": "1", onClick: onLeaveClass, style: { border: "none", background: "transparent", padding: "6px 2px", fontSize: 13, lineHeight: "18px", color: C.muted, textDecoration: "underline", textDecorationColor: C.flField, cursor: "pointer" } }, "Leave class")));
     const box = (extra) => __spreadValues({ border: `1px solid ${C.flField}`, borderRadius: 12, padding: "8px 12px", fontSize: 13, lineHeight: "18px", textAlign: "left", background: C.surface, color: C.ink }, extra);
     // A shade off the other two sections, so the composer reads as its own thing.
-    const ask = sectionOn(C.tNext, "ask",
+    const ask = sectionOn(C.tNext, "Ask",
       h("textarea", { ref: boxRef, className: "focusable fl-scroll", value: text, onChange: (e) => {
         setText(e.target.value);
         setDismissed(false);
         setOptions(null);
         setWordErr(null);
         if (!e.target.value.trim()) setAnchorId(null);
-      }, placeholder: "paste in your question/thought from notes", style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 64, maxHeight: 96, resize: "none", borderColor: C.flField, borderRadius: 12, fontSize: 14 }) }),
+      }, placeholder: "Paste in your question/thought from notes", style: __spreadProps(__spreadValues({}, inputStyle()), { minHeight: 64, maxHeight: 96, resize: "none", borderColor: C.flField, borderRadius: 12, fontSize: 14 }) }),
       // Anchor, framing and send appear once there is text in the box (the
       // value, not focus, decides), and fold away again when it is emptied.
       // Collapsed they are hidden from the tab order too.
       h("div", { "data-composer": ready ? "open" : "closed", "aria-hidden": !ready, style: { display: "grid", gridTemplateRows: ready ? "1fr" : "0fr", opacity: ready ? 1 : 0, visibility: ready ? "visible" : "hidden", transition: ready ? "grid-template-rows 180ms ease, opacity 180ms ease" : "grid-template-rows 180ms ease, opacity 120ms ease, visibility 0s linear 180ms" } },
       h("div", { style: { minHeight: 0, overflow: "hidden", margin: "0 -3px", padding: ready ? "0 3px 3px" : "0 3px" } },
       h("div", { style: { display: "flex", alignItems: "center", gap: 6, marginTop: S.x100, fontSize: 12, lineHeight: "16px", color: C.ink, minHeight: 18 } },
-        h("span", { style: { flexShrink: 0 } }, "anchor:"),
+        h("span", { style: { flexShrink: 0 } }, "Anchor:"),
         ready && chosen ? h("button", { className: "focusable fl-link", title: "Not this one", onClick: () => {
           setDismissed(true);
           setAnchorId(null);
-        }, style: { border: "none", background: "transparent", padding: 0, color: C.ink, fontSize: 12, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0, textDecoration: "underline", textDecorationColor: C.flField } }, chosen.label) : h("span", { style: { color: C.muted } }, ready ? "none found" : "—")),
+        }, style: { border: "none", background: "transparent", padding: 0, color: C.ink, fontSize: 12, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0, textDecoration: "underline", textDecorationColor: C.flField } }, chosen.label) : h("span", { style: { color: C.muted } }, ready ? "None found" : "—")),
       ready && suggestions.length > 1 && !dismissed && h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 } }, suggestions.slice(1).map((a) => h(Chip, { key: a.id, onClick: () => setAnchorId(a.id) }, a.label))),
       h("div", { style: { display: "flex", gap: 10, marginTop: S.x150, alignItems: "flex-start" } },
-        h("button", { className: "focusable", onClick: doWording, disabled: !ready || wording, style: { border: "none", borderRadius: 10, background: C.flGrey, color: C.flGreyInk, padding: "10px 14px", fontSize: 13, fontWeight: 500, flexShrink: 0, cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.6 } }, wording ? "rephrasing…" : "rephrase it"),
+        h("button", { className: "focusable", onClick: doWording, disabled: !ready || wording, style: { border: "none", borderRadius: 10, background: C.flGrey, color: C.flGreyInk, padding: "10px 14px", fontSize: 13, fontWeight: 500, flexShrink: 0, cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.6 } }, wording ? "Rephrasing…" : "Rephrase it"),
         (shown.length > 0 || wordErr || original) && h("div", { style: { flex: 1, minWidth: 0, display: "grid", gap: S.x100 } },
           shown.map((o, i) => {
             const picked = o === text;
@@ -2204,17 +2204,17 @@ try {
             }, style: box({ cursor: "pointer", borderColor: picked ? C.tCur : C.flField, background: picked ? C.tNext : C.surface }) }, o);
           }),
           (shown.length > 0 || wordErr || original) && h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted, display: "flex", gap: S.x100, flexWrap: "wrap" } },
-            h("span", null, wordErr || (shown.length ? usedAI ? "worded by AI — edit anything you like" : "worked out on this device" : "")),
+            h("span", null, wordErr || (shown.length ? usedAI ? "Worded by AI — edit anything you like" : "Worked out on this device" : "")),
             original && h("button", { className: "focusable fl-link", onClick: () => {
               setText(original);
               setOriginal(null);
-            }, style: { border: "none", background: "transparent", padding: 0, fontSize: 11, color: C.ink, textDecoration: "underline", cursor: "pointer" } }, "put my own words back")))),
+            }, style: { border: "none", background: "transparent", padding: 0, fontSize: 11, color: C.ink, textDecoration: "underline", cursor: "pointer" } }, "Put my own words back")))),
       h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginTop: S.x150, fontSize: 12, lineHeight: "16px", color: C.ink } },
         h("button", { className: "focusable", role: "switch", "aria-checked": showName, "aria-label": "Show my name", "data-show-name": showName ? "on" : "off", onClick: () => setShowName(!showName), style: { width: 36, height: 20, flexShrink: 0, borderRadius: 999, border: "none", padding: 2, background: showName ? C.aNow : C.flField, display: "flex", justifyContent: showName ? "flex-end" : "flex-start", cursor: "pointer" } },
           h("span", { style: { width: 16, height: 16, borderRadius: 999, background: "#FFFFFF", display: "block" } })),
         h("span", { style: { fontWeight: 600 } }, "Show my name"),
         h("span", { style: { color: showName ? C.muted : C.ink, fontWeight: showName ? 400 : 600 } }, showName ? "on" : "off \xB7 sent as Anonymous")),
-      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: S.x150 } }, [["table", "share with table", C.aTable], ["now", "send now", C.aNow], ["later", "ask later", C.aLater]].map(([k, lab, bg]) => h("button", { key: k, className: "focusable", disabled: !ready || sending, onClick: () => send(k), style: { border: "none", borderRadius: 10, background: bg, color: C.aInk, padding: "11px 4px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", cursor: ready && !sending ? "pointer" : "default", opacity: ready ? 1 : 0.55 } }, lab))))));
+      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: S.x150 } }, [["table", "Share with table", C.aTable], ["now", "Send now", C.aNow], ["later", "Ask later", C.aLater]].map(([k, lab, bg]) => h("button", { key: k, className: "focusable", disabled: !ready || sending, onClick: () => send(k), style: { border: "none", borderRadius: 10, background: bg, color: C.aInk, padding: "11px 4px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", cursor: ready && !sending ? "pointer" : "default", opacity: ready ? 1 : 0.55 } }, lab))))));
     const empty = (title, body) => h("div", { style: { padding: `${S.x400 || 32}px ${S.x200}px`, textAlign: "center" } }, h("div", { style: { fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 4 } }, title), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.muted } }, body));
     const card = (t, extra) => h(QuestionCard, __spreadValues({ key: t.id, t, anchors: state.anchors, topics: state.topics, me, busy: sending, openId: openThread, mine: t.student_id === me.id, onMove: move, onRecall: recall, onDelete: del, onReply: addReply, onReact: async (th, on) => {
       await store.react(th.id, me.id, on);
@@ -2226,14 +2226,14 @@ try {
     const classList = classOpen.concat(classFeed.filter((t) => DONE.includes(t.status)));
     const paneBody = pane === "class" ? h("div", { "data-pane": "class" },
       h("div", { style: { fontSize: 12, lineHeight: "16px", color: C.muted, marginBottom: S.x150 } }, "Say now questions from the whole class. +1 one you share, or add a follow-up."),
-      classList.length === 0 ? empty("no say now questions yet", "anything sent with send now shows up here for everyone.") : classList.map((t) => card(t, { showCircle: false, social: true }))) : pane === "table" ? h("div", null,
+      classList.length === 0 ? empty("No say now questions yet", "Anything sent with send now shows up here for everyone.") : classList.map((t) => card(t, { showCircle: false, social: true }))) : pane === "table" ? h("div", null,
       mates.length > 0 && h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: S.x150 } }, mates.map((s) => h("span", { key: s.id, style: { fontSize: 11, lineHeight: "16px", fontWeight: s.id === me.id ? 600 : 400, color: C.chipInk, background: C.chip, borderRadius: R.full, padding: "2px 9px" } }, s.id === me.id ? "You" : s.name))),
-      feed.length === 0 ? empty("nothing from your table yet", "share something here to try it on a few people first.") : feed.map((t) => card(t, { showCircle: false }))) : h("div", null, mine.length === 0 ? empty("nothing yet", "whatever you send shows up here.") : mine.map((t) => {
+      feed.length === 0 ? empty("Nothing from your table yet", "Share something here to try it on a few people first.") : feed.map((t) => card(t, { showCircle: false }))) : h("div", null, mine.length === 0 ? empty("Nothing yet", "Whatever you send shows up here.") : mine.map((t) => {
       const q2 = state.queue.find((x) => x.thought_id === t.id);
       return h("div", { key: t.id }, card(t, { key: void 0, t: __spreadProps(__spreadValues({}, t), { replies: repliesOn[t.id] || [] }), mine: true, showCircle: true, social: t.visibility === "now" }),
-        q2 && q2.response && h("div", { style: { margin: `-4px 0 ${S.x150}px 28px`, paddingLeft: S.x150, borderLeft: `2px solid ${C.aLater}` } }, h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted } }, "answer"), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.ink } }, q2.response)));
+        q2 && q2.response && h("div", { style: { margin: `-4px 0 ${S.x150}px 28px`, paddingLeft: S.x150, borderLeft: `2px solid ${C.aLater}` } }, h("div", { style: { fontSize: 11, lineHeight: "16px", color: C.muted } }, "Answer"), h("div", { style: { fontSize: 13, lineHeight: "18px", color: C.ink } }, q2.response)));
     }));
-    const tabs = [["table", "my table", feed.length, C.tabTable], ["class", "my class", classOpen.length, C.laterSoft], ["mine", "my questions", mine.length, C.tabNow]];
+    const tabs = [["table", "My table", feed.length, C.tabTable], ["class", "My class", classOpen.length, C.laterSoft], ["mine", "My questions", mine.length, C.tabNow]];
     const activeTab = tabs.find((x) => x[0] === pane) || tabs[0];
     const list = h("div", { style: { flex: 1, minHeight: 220, display: "flex", flexDirection: "column" } },
       h("div", { style: { display: "flex", gap: 2, flexShrink: 0 } }, tabs.map(([k, lab, n, bg]) => {
@@ -2274,7 +2274,7 @@ try {
     const [email, setEmail] = useState("");
     const ok = name.trim().length > 1;
     return h("div", { style: { minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", padding: "18vh 24px 48px", background: C.surface } },
-      h(FlHeading, null, "welcome to"),
+      h(FlHeading, null, "Welcome to"),
       h("div", { style: { marginTop: 10 } }, h(Logo, { height: 62 })),
       h("div", { style: { width: "100%", maxWidth: 400, marginTop: 56, display: "grid", gap: 18 } },
         h(FlLabel, { label: "Your Name" }, h("input", { className: "focusable", value: name, onChange: (e) => setName(e.target.value), autoFocus: true, style: flInput() })),
@@ -2332,8 +2332,8 @@ try {
     const h = React.createElement;
     return h("div", { style: { minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", padding: "14vh 24px 48px", background: C.surface } },
       h(Logo, { height: 34 }),
-      h("div", { style: { marginTop: 36 } }, h(FlHeading, null, klass ? klass.name : "join your class")),
-      h("div", { style: { fontSize: 14, lineHeight: "20px", color: C.muted, marginTop: 8, textAlign: "center" } }, klass ? "where are you sitting?" : "enter the code your teacher put on the board."),
+      h("div", { style: { marginTop: 36 } }, h(FlHeading, null, klass ? klass.name : "Join your class")),
+      h("div", { style: { fontSize: 14, lineHeight: "20px", color: C.muted, marginTop: 8, textAlign: "center" } }, klass ? "Where are you sitting?" : "Enter the code your teacher put on the board."),
       h("div", { style: { width: "100%", maxWidth: 400, marginTop: 44 } }, !klass ? h(FlLabel, { label: "Class code", hint: "Four digits, from your teacher." }, h("input", {
         className: "focusable",
         value: code,
@@ -2347,7 +2347,7 @@ try {
         style: flInput({ height: 64, fontSize: 32, fontWeight: 700, letterSpacing: 14, textAlign: "center" })
       })) : h(FlLabel, { label: "Your table", hint: tables.length === 0 ? "This class has no tables yet. Ask your teacher to set them up." : null }, h("select", { className: "focusable", value: tableId, onChange: (e) => setTableId(e.target.value), style: flInput() }, tables.map((t) => h("option", { key: t.id, value: t.id }, t.name))))),
       err && h("div", { style: { fontSize: 12, lineHeight: "16px", color: C.danger, marginTop: 12, textAlign: "center", maxWidth: 400 } }, err),
-      h("div", { style: { marginTop: 36 } }, !klass ? h(FlButton, { disabled: !isCode(code) || busy, onClick: () => find(code) }, busy ? "looking…" : "find the class") : h(FlButton, { disabled: busy || !tables.some((t) => t.id === tableId), onClick: go }, busy ? "joining…" : "join")));
+      h("div", { style: { marginTop: 36 } }, !klass ? h(FlButton, { disabled: !isCode(code) || busy, onClick: () => find(code) }, busy ? "Looking…" : "Find the class") : h(FlButton, { disabled: busy || !tables.some((t) => t.id === tableId), onClick: go }, busy ? "joining…" : "join")));
   }
   function Profile({ identity, session, theme, setTheme, onClose, onLeave }) {
     const h = React.createElement;
@@ -2362,8 +2362,8 @@ try {
         identity.email && row("Email", identity.email),
         session && row("Class", session.code),
         session && row("Table", session.student.tableName || "no table"),
-        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: identity.email || session ? `1px solid ${C.flBox}` : "none", fontSize: 14 } }, h("span", { style: { color: C.muted } }, "Theme"), h("div", { style: { display: "flex", gap: 6 } }, ["light", "dark"].map((m) => h("button", { key: m, className: "focusable", onClick: () => setTheme(m), style: { border: "none", borderRadius: R.full, padding: "3px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer", background: theme === m ? C.flInk : C.chip, color: theme === m ? C.surface : C.chipInk } }, m))))),
-      h("div", { style: { display: "flex", gap: 8, marginTop: 24, flexWrap: "wrap" } }, quiet("back to class", onClose), h("div", { style: { marginLeft: "auto", display: "flex", gap: 8 } }, quiet("reset this device", resetDevice), quiet("leave the class", onLeave))));
+        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: identity.email || session ? `1px solid ${C.flBox}` : "none", fontSize: 14 } }, h("span", { style: { color: C.muted } }, "Theme"), h("div", { style: { display: "flex", gap: 6 } }, ["light", "dark"].map((m) => h("button", { key: m, className: "focusable", onClick: () => setTheme(m), style: { border: "none", borderRadius: R.full, padding: "3px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer", background: theme === m ? C.flInk : C.chip, color: theme === m ? C.surface : C.chipInk } }, m === "light" ? "Light" : "Dark"))))),
+      h("div", { style: { display: "flex", gap: 8, marginTop: 24, flexWrap: "wrap" } }, quiet("Back to class", onClose), h("div", { style: { marginLeft: "auto", display: "flex", gap: 8 } }, quiet("Reset this device", resetDevice), quiet("Leave the class", onLeave))));
   }
   function Settings({ onClose, onSaved }) {
     const [s, setS] = useState(settings());
@@ -2558,7 +2558,7 @@ try {
     if (!ready) return null;
     const inClass = identity && session;
     let body;
-    if (CONNECTED && !cloud) body = React.createElement("div", { style: { padding: "14vh 16px 32px", background: C.surface, minHeight: "100%" } }, React.createElement(Logo, { height: 24 }), React.createElement("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: 16, marginTop: 28 } }, React.createElement("div", { style: { fontSize: 18, lineHeight: "24px", fontWeight: 800, letterSpacing: -0.4, color: C.flInk, marginBottom: 6 } }, "can't reach floorum"), React.createElement("div", { style: { fontSize: 14, lineHeight: "20px", color: C.body, marginBottom: 6 } }, conn.reason || "The connection to the class database isn't available."), React.createElement("div", { style: { fontSize: 12, lineHeight: "16px", color: C.muted, marginBottom: 16 } }, "Check you are online and reload. Nothing you have written has been lost."), React.createElement("div", { style: { display: "flex", gap: 8 } }, [["reload", () => location.reload()], ["reset this device", resetDevice]].map(([l, fn]) => React.createElement("button", { key: l, className: "focusable", onClick: fn, style: { border: "none", borderRadius: 9, background: C.flGrey, color: C.flGreyInk, padding: "9px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" } }, l)))));
+    if (CONNECTED && !cloud) body = React.createElement("div", { style: { padding: "14vh 16px 32px", background: C.surface, minHeight: "100%" } }, React.createElement(Logo, { height: 24 }), React.createElement("div", { style: { border: `1px solid ${C.flBox}`, borderRadius: 4, padding: 16, marginTop: 28 } }, React.createElement("div", { style: { fontSize: 18, lineHeight: "24px", fontWeight: 800, letterSpacing: -0.4, color: C.flInk, marginBottom: 6 } }, "Can't reach floorum"), React.createElement("div", { style: { fontSize: 14, lineHeight: "20px", color: C.body, marginBottom: 6 } }, conn.reason || "The connection to the class database isn't available."), React.createElement("div", { style: { fontSize: 12, lineHeight: "16px", color: C.muted, marginBottom: 16 } }, "Check you are online and reload. Nothing you have written has been lost."), React.createElement("div", { style: { display: "flex", gap: 8 } }, [["Reload", () => location.reload()], ["Reset this device", resetDevice]].map(([l, fn]) => React.createElement("button", { key: l, className: "focusable", onClick: fn, style: { border: "none", borderRadius: 9, background: C.flGrey, color: C.flGreyInk, padding: "9px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" } }, l)))));
     else if (!identity) body = /* @__PURE__ */ React.createElement(SignIn, { onDone: (id) => {
       LS.set("sayit:identity", id);
       setIdentity(id);

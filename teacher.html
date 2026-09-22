@@ -739,7 +739,7 @@ try {
     };
     return { items, push, dismiss };
   }
-  const NOTICE_KIND = { now: ["say now", "aNow"], table: ["table", "aTable"], reply: ["follow-up", "aLater"] };
+  const NOTICE_KIND = { now: ["Say now", "aNow"], table: ["Table", "aTable"], reply: ["Follow-up", "aLater"] };
   const Notices = ({ items, onDismiss, place }) => items.length === 0 ? null : /* @__PURE__ */ React.createElement("div", { className: "fl-notices", role: "status", "aria-live": "polite", style: place }, items.map((n) => {
     const [label, tone] = NOTICE_KIND[n.kind] || NOTICE_KIND.table;
     const body = /* @__PURE__ */ React.createElement(React.Fragment, null,
@@ -1727,13 +1727,13 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
     const chip = (text, bg, fg = C.aInk) => h("span", { style: { display: "inline-block", fontSize: 11, lineHeight: "16px", fontWeight: 600, color: fg, background: bg, borderRadius: R.full, padding: "1px 8px", marginRight: 6 } }, text);
     const meta = __spreadProps(__spreadValues({}, F.small), { color: C.muted });
     return h("div", { "data-fthread": t.id, style: { marginBottom: S.x200 } },
-      h("div", { style: __spreadProps(__spreadValues({}, meta), { marginBottom: S.x100 }) }, "\u2191 original question \u00B7 ", later ? ["discussed at ", table ? table.name : "the table", " before it reached you"] : "follow-ups and +1s from the table and the class"),
+      h("div", { style: __spreadProps(__spreadValues({}, meta), { marginBottom: S.x100 }) }, "\u2191 Original question \u00B7 ", later ? ["discussed at ", table ? table.name : "the table", " before it reached you"] : "follow-ups and +1s from the table and the class"),
       h("div", { style: { marginLeft: 2, paddingLeft: S.x150, borderLeft: `2px solid ${line}`, display: "grid", gap: S.x100 } },
         rows.map((e, i) => e.kind === "reply" ? h("div", { key: e.r.id || "r" + i, "data-kind": "follow-up" },
-          h("div", { style: meta }, chip("follow-up", C.chip, C.chipInk), nameOf(e.r), e.r.created_at ? " \u00B7 " + relTime(e.r.created_at) : ""),
+          h("div", { style: meta }, chip("Follow-up", C.chip, C.chipInk), nameOf(e.r), e.r.created_at ? " \u00B7 " + relTime(e.r.created_at) : ""),
           h("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.ink, marginTop: 2 }) }, e.r.text)
         ) : h("div", { key: "p" + i, "data-kind": "plus-one", style: meta }, chip("+1", C.aTable), (later ? e.n === 1 ? "1 tablemate" : `${e.n} tablemates` : e.n === 1 ? "1 classmate" : `${e.n} classmates`) + " had the same question")),
-        h("div", { key: "sent", "data-kind": "escalation", style: meta }, chip(later ? "for after class" : "sent to you", line), who, later ? " sent it for after class" : " sent it to you")));
+        h("div", { key: "sent", "data-kind": "escalation", style: meta }, chip(later ? "For after class" : "Sent to you", line), who, later ? " sent it for after class" : " sent it to you")));
   }
   const Pill = ({ bg, fg, on, disabled, onClick, children }) => /* @__PURE__ */ React.createElement(
     "button",
@@ -1929,7 +1929,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       await store.status(t.id, status);
       reload();
     };
-    const badgeOf = (t) => Q_UNREAD.includes(t.status) ? ["unread", C.tCur, C.tCurInk] : t.status === "marked" ? ["marked", C.aTable, C.aInk] : t.status === "taking" ? ["has the floor", C.aNow, C.aInk] : t.status === "resolved" ? ["no longer needed", C.tabNow, C.tabInk] : t.status === "spoken" ? ["said in class", C.tabNow, C.tabInk] : t.status === "addressed" ? ["addressed", C.tabNow, C.tabInk] : null;
+    const badgeOf = (t) => Q_UNREAD.includes(t.status) ? ["Unread", C.tCur, C.tCurInk] : t.status === "marked" ? ["Marked", C.aTable, C.aInk] : t.status === "taking" ? ["Has the floor", C.aNow, C.aInk] : t.status === "resolved" ? ["No longer needed", C.tabNow, C.tabInk] : t.status === "spoken" ? ["Said in class", C.tabNow, C.tabInk] : t.status === "addressed" ? ["Addressed", C.tabNow, C.tabInk] : null;
     const liveRow = (t) => {
       const pill = (bg, fg, label, onClick) => /* @__PURE__ */ React.createElement(Pill, { key: label, bg, fg, onClick }, label);
       const actions = isAnswered(t) ? [pill(C.flGrey, C.flGreyInk, "Reopen", () => setQ(t, "seen"))] : [
@@ -2017,7 +2017,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
         color: tone.fg,
         borderRadius: R.full,
         padding: `${S.x025}px ${S.x100}px`
-      }) }, q.status), a && /* @__PURE__ */ React.createElement(Tag, null, a.label), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ marginLeft: "auto" }, F.small), { color: C.muted }) }, who, " \xB7 ", relTime(t.created_at))), /* @__PURE__ */ React.createElement("div", { className: "thought", style: { fontSize: 18, lineHeight: "26px", color: C.ink, marginBottom: S.x200 } }, t.text), /* @__PURE__ */ React.createElement(FacultyThread, { t, state }), q.status === "pending" && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(
+      }) }, q.status === "answered" ? "Answered" : q.status === "scheduled" ? "Scheduled" : "Pending"), a && /* @__PURE__ */ React.createElement(Tag, null, a.label), /* @__PURE__ */ React.createElement("span", { style: __spreadProps(__spreadValues({ marginLeft: "auto" }, F.small), { color: C.muted }) }, who, " \xB7 ", relTime(t.created_at))), /* @__PURE__ */ React.createElement("div", { className: "thought", style: { fontSize: 18, lineHeight: "26px", color: C.ink, marginBottom: S.x200 } }, t.text), /* @__PURE__ */ React.createElement(FacultyThread, { t, state }), q.status === "pending" && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(
         Pill,
         {
           bg: C.aLater,
@@ -2436,7 +2436,7 @@ Be terse. Long values get cut off. Skip title slides, contents and references.`;
       border: `1px solid ${C.flBox}`,
       borderRadius: R.full,
       padding: `${S.x050}px ${S.x100}px`
-    }) }, "demo"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => setTheme(theme === "dark" ? "light" : "dark") }, theme === "dark" ? "Light" : "Dark"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => setShowSettings(true) }, aiReady() ? "AI on" : "AI off"));
+    }) }, "Demo"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => setTheme(theme === "dark" ? "light" : "dark") }, theme === "dark" ? "Light" : "Dark"), /* @__PURE__ */ React.createElement(Btn, { compact: true, tone: "subtle", onClick: () => setShowSettings(true) }, aiReady() ? "AI on" : "AI off"));
     if (CONNECTED && !cloud) return /* @__PURE__ */ React.createElement(FacultyChrome, { status: "idle", tools }, /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 460, margin: "40px auto 0" } }, /* @__PURE__ */ React.createElement(Card, { style: { padding: S.x300 } }, /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.hSmall), { fontSize: 20, lineHeight: "26px", color: C.ink, marginBottom: S.x100 }) }, "Can't reach floorum"), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.body), { color: C.body, marginBottom: S.x150 }) }, conn.reason || "The connection to the class database isn't available."), /* @__PURE__ */ React.createElement("div", { style: __spreadProps(__spreadValues({}, F.small), { color: C.muted, marginBottom: S.x250 }) }, "Check you are online and reload. Nothing you have written has been lost."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: S.x100 } }, /* @__PURE__ */ React.createElement(Btn, { tone: "primary", onClick: () => location.reload() }, "Reload"), /* @__PURE__ */ React.createElement(Btn, { tone: "subtle", onClick: resetDevice }, "Reset this device")))));
     return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(TeacherApp, { store, openable: demoClass, tools }), showSettings && /* @__PURE__ */ React.createElement(
       Settings,
